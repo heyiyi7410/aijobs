@@ -1,7 +1,17 @@
 <template>
   <div>
     <div class="card">
-      <h2 class="card-title">第 3 步 · 这些单位和岗位适合你</h2>
+      <div class="card-head">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="7" width="18" height="13" rx="2.2" />
+            <path d="M8.5 7V5.2A1.2 1.2 0 0 1 9.7 4h4.6a1.2 1.2 0 0 1 1.2 1.2V7" />
+            <path d="M3 12.5h18" />
+          </svg>
+        </span>
+        <h2 class="card-title">这些单位和岗位适合你</h2>
+      </div>
       <p class="card-hint">
         已经按适合程度排好队了，最上面最合适。点圆圈选中要投的，选好了点下面「去投递」。<br />
         标着<span class="badge badge-mail">可代投</span>的岗位公告里留了报名邮箱，下一步能替你一键把简历发过去；
@@ -12,10 +22,10 @@
         <label class="csearch-label">想去哪家单位？直接搜它的名字</label>
         <div class="csearch-row">
           <input
-            class="input"
+            class="input input-search"
             v-model="q"
             @keyup.enter="doSearch"
-            placeholder="例如：武钢、中建三局、中国邮政"
+            placeholder="按单位名搜索，例如：武钢、中建三局"
           />
           <button class="btn btn-primary" :disabled="store.companySearching" @click="doSearch">
             {{ store.companySearching ? '正在搜…' : '搜这家单位' }}
@@ -116,39 +126,46 @@
       >
         <button class="job-pick" aria-hidden="true" tabindex="-1"></button>
         <div class="job-main">
-          <h3 class="job-title">
-            {{ j.title }}
-            <span class="badge" :class="badgeClass(j.nature)">{{ j.nature }}</span>
-            <span v-if="j.hire_type === '劳务派遣'" class="badge badge-warn">劳务派遣</span>
-            <span v-else class="badge badge-other">直签</span>
-            <span v-if="j.recruit_type" class="badge badge-recruit">{{ j.recruit_type }}</span>
-            <!-- 公告里留了报名邮箱的岗位，第 4 步能替你一键代投；
-                 没这个徽章的只能自己去它的招聘网站投 —— 提前让用户看得见 -->
-            <span v-if="j.hr_email" class="badge badge-mail" :title="'报名邮箱：' + j.hr_email">可代投</span>
-            <!-- 民企/基层岗位大多不留邮箱，只留个手机号。这条「可电话联系」
-                 是给他们的入口：点开详情直接拨号，不用自己从公告里抄号码 -->
-            <span v-if="j.hr_phone && !j.hr_email" class="badge badge-phone" :title="'联系电话：' + j.hr_phone">可电话联系</span>
-            <!-- 岗位在哪个范围：本地不标；「全国招聘」「本省」单独标出来，
-                 让用户一眼知道这条可能不在本市（公告只写「全国」或省名） -->
-            <span v-if="j.city_scope === 'national'" class="badge badge-other">全国招聘</span>
-            <span v-else-if="j.city_scope === 'province'" class="badge badge-other">本省</span>
-            <span v-if="j.nearby" class="badge badge-other">外地</span>
-          </h3>
+          <!-- 右上角评分块（效果图：86 分/很适合） -->
+          <div class="job-top">
+            <h3 class="job-title">
+              {{ j.title }}
+              <span class="badge" :class="badgeClass(j.nature)">{{ j.nature }}</span>
+              <span v-if="j.hire_type === '劳务派遣'" class="badge badge-warn">劳务派遣</span>
+              <span v-else class="badge badge-other">直签</span>
+              <span v-if="j.recruit_type" class="badge badge-recruit">{{ j.recruit_type }}</span>
+              <!-- 公告里留了报名邮箱的岗位，第 4 步能替你一键代投；
+                   没这个徽章的只能自己去它的招聘网站投 —— 提前让用户看得见 -->
+              <span v-if="j.hr_email" class="badge badge-mail" :title="'报名邮箱：' + j.hr_email">可代投</span>
+              <!-- 民企/基层岗位大多不留邮箱，只留个手机号。这条「可电话联系」
+                   是给他们的入口：点开详情直接拨号，不用自己从公告里抄号码 -->
+              <span v-if="j.hr_phone && !j.hr_email" class="badge badge-phone" :title="'联系电话：' + j.hr_phone">可电话联系</span>
+              <!-- 岗位在哪个范围：本地不标；「全国招聘」「本省」单独标出来，
+                   让用户一眼知道这条可能不在本市（公告只写「全国」或省名） -->
+              <span v-if="j.city_scope === 'national'" class="badge badge-other">全国招聘</span>
+              <span v-else-if="j.city_scope === 'province'" class="badge badge-other">本省</span>
+              <span v-if="j.nearby" class="badge badge-other">外地</span>
+            </h3>
+            <div class="job-score" :class="scoreClass(j.score)"
+              :aria-label="'适合程度 ' + j.score + ' 分，' + j.level">
+              <b>{{ j.score }}<i>分</i></b>
+              <span class="lvl">{{ j.level }}</span>
+            </div>
+          </div>
           <p class="job-company">{{ j.company }} · {{ j.city }}{{ j.district }}</p>
           <p v-if="j.deadline" class="job-line"><span class="k">截止：</span>{{ j.deadline }}</p>
           <p v-if="j.headcount || j.recruit_type" class="job-line">
             <span class="k">招聘：</span>{{ j.recruit_type || '社会招聘' }}<template v-if="j.headcount"> · 招 {{ j.headcount }} 人</template>
           </p>
 
-          <p class="job-line">
-            <span class="k">适合程度：</span>
-            <span class="score" :class="scoreClass(j.score)">{{ j.score }} 分 · {{ j.level }}</span>
-          </p>
           <p class="job-line"><span class="k">工资：</span><b>{{ j.salary_text }}</b></p>
           <p class="job-line"><span class="k">要求：</span>{{ j.exp }} / {{ j.edu }}</p>
 
-          <!-- 前面的勾和点由 CSS 画（禁 emoji / 符号字符当图标） -->
-          <p v-for="r in j.reasons" :key="r" class="reason">{{ r }}</p>
+          <!-- 适合原因：浅蓝面板（效果图）；前面的勾由 SVG 画（禁 emoji/字符当图标） -->
+          <div v-if="j.reasons && j.reasons.length" class="job-why">
+            <p class="job-why-t">适合原因</p>
+            <p v-for="r in j.reasons" :key="r" class="reason">{{ r }}</p>
+          </div>
           <p v-for="t in j.tips" :key="t" class="tip-line">{{ t }}</p>
 
           <!-- 详情：展开看岗位职责/公告摘要、报名时间、原文链接 -->

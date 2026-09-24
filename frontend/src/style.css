@@ -1,39 +1,45 @@
-/* 找工作助手 · 样式
-   方向：克制专业 + 可信赖（完整说明见 ../../.impeccable.md）
-   面向不常使用电脑的人：大字号、大按钮、高对比、一步只做一件事。
+/* 找工作助手 · 样式（2026-09 按用户 4 张效果图重做）
+   方向：明快蓝白 —— 蓝色渐变 hero、白色大圆角卡片、蓝勾选 chips、
+   白色底部操作栏。面向不常使用电脑的人：大字号、大按钮、高对比、一步只做一件事。
 
-   三条不能碰的规矩：
+   三条不能碰的规矩（完整规范见 ../DESIGN.md）：
    1. 尺寸一律 rem —— 顶上的 A+/A- 会改 html 的 font-size（18px ↔ 23px）
    2. 触控目标 ≥ 44px —— 这个产品用户手不稳
    3. 焦点环必须看得见 —— 不能 outline:none 就完事 */
 
 :root {
-  /* ---- 色：冷调中性 + 单一强调色 ---- */
-  --ink: #12263a;          /* 正文。off-black，不用 #000 */
-  --ink-2: #56687d;        /* 次要文字，白底对比 4.6:1 */
-  --ink-3: #8798a8;        /* 占位 / 弱化 */
-  --bg: #f5f8fb;
+  /* ---- 色：明快蓝白（取自效果图） ---- */
+  --ink: #16293e;          /* 正文。off-black，不用 #000 */
+  --ink-2: #5a6b80;        /* 次要文字，白底对比 4.9:1 */
+  --ink-3: #93a3b5;        /* 占位 / 弱化 */
+  --bg: #f2f6fc;
   --surface: #ffffff;
-  --surface-2: #eef4fa;
-  --line: #dde6ef;
-  --line-2: #c4d3e0;
-  --primary: #0369a1;      /* 专业蓝，白底 5.4:1 */
-  --primary-7: #02598a;
-  --primary-1: #e8f4fc;
-  --accent: #16a34a;       /* 成功 / 通过 */
-  --accent-7: #0f7a41;     /* 压在 --accent-1 上的深绿字，对比 4.9:1 */
-  --accent-1: #e7f6ec;
-  --warn: #8a5200;
-  --warn-1: #fdf1de;
-  --danger: #c4291c;
-  --danger-1: #fdeceb;
+  --surface-2: #f0f6fe;    /* 浅蓝灰填充（信息条、输入底） */
+  --line: #e3ebf5;
+  --line-2: #c9d8ea;
+  --primary: #1f7af2;      /* 效果图主蓝，白字压它 3.5:1（大字/粗体达标） */
+  --primary-7: #0b5ecc;    /* 深蓝：浅底上的小字用它，对比 5.9:1 */
+  --primary-1: #e8f1fe;    /* 选中 chip / 勾选行底色 */
+  --primary-grad: linear-gradient(135deg, #4f9cf9 0%, #2489f5 46%, #1266e8 100%);
+  --accent: #22b071;       /* 成功 / 很适合（大字粗体用） */
+  --accent-7: #0e8a52;     /* 压在 --accent-1 上的深绿字 */
+  --accent-1: #e5f7ee;
+  --warn: #a35a00;         /* 浅橙底上的深橙字，对比 5.5:1 */
+  --warn-7: #f08c00;       /* 实色橙：徽章底、大分数 */
+  --warn-1: #fff3e0;
+  --danger: #e5484d;
+  --danger-7: #d33136;
+  --danger-1: #feecec;
+  --purple: #7c5cf0;
 
-  /* ---- 圆角 ---- */
-  --radius: 0.85rem;
-  --radius-sm: 0.5rem;
+  /* ---- 圆角：效果图是大圆角卡片 ---- */
+  --radius: 1.05rem;
+  --radius-btn: 0.8rem;
+  --radius-sm: 0.65rem;
   --radius-pill: 99rem;
+  --shadow-card: 0 1px 2px rgba(23, 78, 148, .05), 0 4px 14px rgba(23, 78, 148, .06);
 
-  /* ---- 动效 token（完整依据见 webapp/DESIGN.md 第一节第 5 问）
+  /* ---- 动效 token（完整依据见 DESIGN.md 第一节第 5 问）
      曲线和时长只能从这里取，不许在组件里另起一套数值 ---- */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);      /* 入场 / 退场 / UI 默认 */
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);  /* 屏幕内移动、形变 */
@@ -45,6 +51,14 @@
   /* 旧名保留为别名：全站几十处仍在用 --ease / --t，改名会漏改 */
   --ease: var(--ease-out);
   --t: var(--t-pop);
+
+  /* 蓝圆白勾（效果图 chips / 步骤条 / 选中圆共用的那颗勾）。
+     用 SVG data-URI：分辨率无关，也不吃字体差异（DESIGN.md 禁字符当图标）。 */
+  --check-badge: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='10' fill='%231f7af2'/%3E%3Cpath d='M5.6 10.4l3 3 5.8-6.4' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --check-badge-green: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='10' fill='%2322b071'/%3E%3Cpath d='M5.6 10.4l3 3 5.8-6.4' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='9' fill='none' stroke='%230b5ecc' stroke-width='1.8'/%3E%3Cpath d='M10 9v5' stroke='%230b5ecc' stroke-width='1.8' stroke-linecap='round'/%3E%3Ccircle cx='10' cy='6' r='1.1' fill='%230b5ecc'/%3E%3C/svg%3E");
+  --icon-warn-round: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='10' fill='%23fff'/%3E%3Cpath d='M10 4.5v7' stroke='%23e5484d' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='10' cy='15' r='1.4' fill='%23e5484d'/%3E%3C/svg%3E");
+  --icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='8.6' cy='8.6' r='5.6' fill='none' stroke='%2393a3b5' stroke-width='1.8'/%3E%3Cpath d='M13 13l4 4' stroke='%2393a3b5' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
 * {
@@ -58,7 +72,7 @@ html {
   overflow-x: clip;
   /* 分步向导：Android 的下拉刷新会把页面整个重载，用户的档案、已选岗位、
      投递进度全部丢掉 —— 这是"手滑一下就白干"级别的破坏，必须禁掉。
-     根上用 none，内部滚动容器（弹窗正文）用 contain，见 .modal-body。 */
+     根上用 none，内部滚动容器（弹窗正文）用 contain，见各组件 .modal-body。 */
   overscroll-behavior: none;
 }
 
@@ -66,7 +80,7 @@ body {
   margin: 0;
   overflow-x: clip;
   overscroll-behavior: none;
-  /* 手机上点按钮不要那层灰色闪块，:active 的位移就是反馈 */
+  /* 手机上点按钮不要那层灰色闪块，:active 的缩放就是反馈 */
   -webkit-tap-highlight-color: transparent;
   background: var(--bg);
   color: var(--ink);
@@ -91,7 +105,7 @@ a,
 }
 
 /* 长按不选中控件文字、不弹复制/分享菜单 —— 原生控件从不这样。
-   注意：只加在「控件」上。岗位卡 .job 里是价格、公司名、电话这些**内容**，
+   注意：只加在「控件」上。岗位卡 .job 里是公司名、邮箱这些**内容**，
    用户要能长按复制，所以不加（DESIGN.md 第三节：正文不许 user-select:none）。 */
 button,
 [role='button'],
@@ -115,6 +129,7 @@ button,
 
 /* 数字（分数、条数、秒数）用等宽字形，跳动时不会左右晃 */
 .score,
+.job-score b,
 .stepbar .n,
 .result-item b,
 .finding-t b {
@@ -127,33 +142,117 @@ button,
   padding: 0 1rem calc(7.5rem + env(safe-area-inset-bottom));
 }
 /* 第 3 步是岗位列表，宽一点看得清一行信息 */
-#app.wide {
+.shell.wide {
   max-width: 58rem;
 }
 
-/* ================= 顶部 ================= */
+/* ================= 顶部 hero：蓝色渐变 ================= */
 .topbar {
+  position: relative;
+  background: var(--primary-grad);
+  color: #fff;
+  overflow: hidden;
+  border-radius: 0 0 1.4rem 1.4rem;
+}
+.topbar-in {
+  position: relative;
+  z-index: 1;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 1.6rem;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.6rem;
-  padding: 1.4rem 0 0.9rem;
+  gap: 0.8rem;
+}
+.topbar.wide .topbar-in {
+  max-width: 58rem;
 }
 .topbar h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 1.62rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
   margin: 0;
 }
 .topbar .sub {
-  font-size: 0.9rem;
-  color: var(--ink-2);
-  margin: 0.15rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0.3rem 0 0;
 }
 .topbar-actions {
   display: flex;
   gap: 0.5rem;
   flex-shrink: 0;
+  padding-top: 0.2rem;
+}
+/* hero 里的白色小药丸按钮（A+/朗读） */
+.btn-hero {
+  min-height: 2.7rem;
+  padding: 0 0.95rem;
+  font-size: 0.98rem;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--primary-7);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: transform var(--t-press) var(--ease-out),
+    box-shadow var(--t-pop) var(--ease-out);
+}
+.btn-hero:active {
+  transform: scale(0.96);
+}
+.btn-hero svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+}
+/* hero 右下角的装饰：一张纸 + 放大镜（纯 CSS 画，纯装饰） */
+.hero-doc {
+  position: absolute;
+  right: 4.6rem;
+  bottom: -1.6rem;
+  width: 4.4rem;
+  height: 5.4rem;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.16);
+  transform: rotate(-16deg);
+}
+.hero-doc::before {
+  /* 纸上的两道「字」 */
+  content: '';
+  position: absolute;
+  left: 0.8rem;
+  right: 1.4rem;
+  top: 1.3rem;
+  height: 0.28rem;
+  border-radius: 99rem;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 1.1rem 0 rgba(255, 255, 255, 0.5);
+}
+.hero-lens {
+  position: absolute;
+  right: 1.4rem;
+  bottom: 0.9rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0.5rem solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+}
+.hero-lens::after {
+  /* 镜柄 */
+  content: '';
+  position: absolute;
+  right: -0.85rem;
+  bottom: -0.55rem;
+  width: 1.3rem;
+  height: 0.5rem;
+  border-radius: 99rem;
+  background: rgba(255, 255, 255, 0.35);
+  transform: rotate(45deg);
 }
 
 /* ================= 通用控件 ================= */
@@ -174,8 +273,8 @@ button {
   min-height: 3.3rem;                 /* 59px @18px，远超 44px */
   padding: 0 1.4rem;
   font-size: 1.05rem;
-  font-weight: 600;
-  border-radius: var(--radius);
+  font-weight: 700;
+  border-radius: var(--radius-btn);
   border: 1px solid var(--line-2);
   background: var(--surface);
   color: var(--ink);
@@ -198,10 +297,12 @@ button {
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(31, 122, 242, 0.28);
 }
 .btn-primary:disabled {
   background: var(--ink-3);
   border-color: var(--ink-3);
+  box-shadow: none;
   color: #fff;
   cursor: not-allowed;
   transform: none;
@@ -210,7 +311,7 @@ button {
   width: 100%;
   min-height: 4.2rem;
   font-size: 1.3rem;
-  border-radius: var(--radius);
+  border-radius: var(--radius-btn);
 }
 .btn-mini {
   min-height: 2.75rem;
@@ -223,78 +324,156 @@ button {
   height: 1.05rem;
   flex: none;
 }
+/* 蓝描边按钮（效果图里的「上一步」「重新上传」「直达」） */
+.btn-outline {
+  background: var(--surface);
+  border-color: var(--primary);
+  color: var(--primary-7);
+}
 
-/* ================= 步骤条 ================= */
+/* ================= 步骤条：圆点 + 连线 + 下方文字 ================= */
 .stepbar {
   display: flex;
-  gap: 0.4rem;
-  margin: 0 0 1.4rem;
+  margin: 1.15rem 0 1.35rem;
 }
 .stepbar .s {
   flex: 1;
   min-width: 0;
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.6rem;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  gap: 0.42rem;
+  padding: 0;
+  border: none;
+  background: none;
   color: var(--ink-2);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 600;
-  transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
-    color var(--t) var(--ease);
+  transition: color var(--t-pop) var(--ease-out);
 }
+/* 圆点 */
 .stepbar .s .n {
   flex: none;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 2.1rem;
+  height: 2.1rem;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 0.9rem;
+  background: var(--surface);
+  border: 2px solid var(--line-2);
+  color: var(--ink-3);
+  font-size: 0.98rem;
   font-weight: 700;
   line-height: 1;
+  position: relative;
+  z-index: 1;
+  transition: background var(--t-pop) var(--ease-out),
+    border-color var(--t-pop) var(--ease-out), color var(--t-pop) var(--ease-out),
+    transform var(--t-press) var(--ease-out);
+}
+/* 连线：从这个圆的右缘拉到下一个圆的左缘 */
+.stepbar .s:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 1.05rem;
+  left: calc(50% + 1.5rem);
+  right: calc(-50% + 1.5rem);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line-2);
+  transition: background var(--t-pop) var(--ease-out);
 }
 .stepbar .s.on {
-  border-color: var(--primary);
-  background: var(--primary-1);
-  color: var(--primary-7);
+  color: var(--primary);
+  font-weight: 700;
 }
 .stepbar .s.on .n {
   background: var(--primary);
+  border-color: var(--primary);
   color: #fff;
 }
 .stepbar .s.done {
-  background: var(--surface-2);
   color: var(--primary-7);
 }
 .stepbar .s.done .n {
   background: var(--primary);
-  color: #fff;
+  border-color: var(--primary);
+  color: transparent;              /* 数字藏掉，换成白勾 */
+}
+.stepbar .s.done .n::before {
+  content: '';
+  width: 0.95rem;
+  height: 0.95rem;
+  background: var(--check-badge) center / contain no-repeat;
+}
+.stepbar .s.done::after {
+  background: var(--primary);
 }
 /* 走过的步骤可以点回去改 —— 给个手型，让人知道它是能点的 */
 .stepbar .s.back {
   cursor: pointer;
 }
+.stepbar .s.back:active .n {
+  transform: scale(0.92);
+}
 
-/* ================= 卡片 / 区块 ================= */
+/* ================= 卡片 / 区块：白色大圆角 ================= */
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 1.3rem 1.2rem;
+  box-shadow: var(--shadow-card);
+  padding: 1.3rem 1.15rem;
   margin-bottom: 1rem;
 }
+/* 带彩色图标块的卡片标题（效果图的标志性元素） */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.55rem;
+}
+.card-head .card-title {
+  margin: 0;
+}
+.card-head .extra {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.tile {
+  flex: none;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--primary);
+}
+.tile svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.tile-green  { background: var(--accent); }
+.tile-orange { background: var(--warn-7); }
+.tile-purple { background: var(--purple); }
+.tile-cyan   { background: #12b3d6; }
+
 .card-title {
-  font-size: 1.2rem;
-  font-weight: 700;
+  font-size: 1.22rem;
+  font-weight: 800;
   margin: 0 0 0.2rem;
   letter-spacing: -0.01em;
+}
+/* 标题后面的浅色小注（可多选 / 带*为必填） */
+.card-title .soft {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--ink-3);
+  margin-left: 0.3rem;
 }
 .card-hint {
   font-size: 0.92rem;
@@ -319,7 +498,7 @@ button {
   margin: -0.2rem 0 0.6rem;
   max-width: 42rem;
 }
-/* 勾选行（如「连全国招聘和本省一起找」）：整行可点，方框放大到手指点得到 */
+/* 勾选行（如「连全国招聘和本省一起找」）：整行可点 */
 .check-line {
   display: flex;
   align-items: center;
@@ -340,7 +519,7 @@ button {
   font-size: 1.1rem;
   font-family: inherit;
   color: var(--ink);
-  border: 1px solid var(--line-2);
+  border: 1.5px solid var(--line-2);
   border-radius: var(--radius-sm);
   background: var(--surface);
   transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
@@ -353,6 +532,11 @@ button {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-1);
 }
+/* 带放大镜的搜索框（效果图的单位搜索 / 关键词框） */
+.input-search {
+  background: var(--surface) var(--icon-search) no-repeat 0.8rem center / 1.15rem;
+  padding-left: 2.35rem;
+}
 textarea.input {
   min-height: 7rem;
   line-height: 1.6;
@@ -362,26 +546,82 @@ textarea.input {
   margin-left: 0.15rem;
 }
 .err {
-  color: var(--danger);
+  color: var(--danger-7);
   font-size: 0.95rem;
   margin-top: 0.35rem;
   font-weight: 600;
+}
+/* 全局错误横幅（效果图中底部的红条）：实色红底白字，一眼看见 */
+.err-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  background: var(--danger);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  border-radius: 0.8rem;
+  padding: 0.8rem 0.95rem;
+  margin: 0.5rem 0 1rem;
+}
+.err-banner::before {
+  content: '';
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  margin-top: 0.15rem;
+  background: var(--icon-warn-round) center / contain no-repeat;
+}
+
+/* iOS 式开关（效果图的「留着原件」「按岗位定制简历」） */
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 3.1rem;
+  height: 1.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--line-2);
+  position: relative;
+  flex: none;
+  cursor: pointer;
+  margin: 0;
+  transition: background var(--t-pop) var(--ease-out);
+}
+.switch::before {
+  content: '';
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(22, 41, 62, 0.3);
+  transition: transform var(--t-pop) var(--ease-out);
+}
+.switch:checked {
+  background: var(--primary);
+}
+.switch:checked::before {
+  transform: translateX(1.35rem);
 }
 
 /* ================= 第 2 步「正在找岗位」的等待提示 =================
    要让人一眼看出机器在干活，不然会以为死机了 */
 .finding {
   background: var(--primary-1);
-  border: 1px solid #cfe6f6;
-  border-radius: var(--radius-sm);
+  border: 1px solid #cfe2fb;
+  border-radius: 0.8rem;
   padding: 0.9rem 1.1rem;
   margin: 0.6rem 0 0.2rem;
 }
-.finding-t { font-weight: 700; margin: 0; font-size: 1.05rem; }
+.finding-t { font-weight: 700; margin: 0; font-size: 1.05rem; color: var(--primary-7); }
 .finding-s { color: var(--ink-2); font-size: 0.92rem; margin: 0.35rem 0 0; }
 .finding-w { color: var(--ink-2); font-size: 0.92rem; margin: 0.35rem 0 0; }
 
-/* ================= 可点选的大标签 ================= */
+/* ================= 可点选的大标签（chips） =================
+   效果图：选中 = 浅蓝底 + 深蓝字 + 蓝圆白勾；未选 = 白底灰边 */
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -392,13 +632,13 @@ textarea.input {
   padding: 0 1.1rem;
   font-size: 1rem;
   font-weight: 600;
-  border: 1px solid var(--line-2);
+  border: 1.5px solid var(--line-2);
   border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--ink);
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.42rem;
   transition: background var(--t-pop) var(--ease-out),
     border-color var(--t-pop) var(--ease-out), color var(--t-pop) var(--ease-out),
     transform var(--t-press) var(--ease-out);
@@ -408,28 +648,28 @@ textarea.input {
 }
 .chip.on {
   background: var(--primary-1);
-  border-color: var(--primary);
+  border-color: transparent;
   color: var(--primary-7);
 }
-/* 选中标记用 CSS 画，不用 ✓ 字符（禁 emoji/符号当图标） */
+/* 选中标记：蓝圆白勾（SVG 画，不用 ✓ 字符 —— 禁字符/emoji 当图标） */
 .chip.on::before {
   content: '';
-  width: 0.4rem;
-  height: 0.72rem;
-  border: solid currentColor;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg) translateY(-0.06rem);
+  width: 1.1rem;
+  height: 1.1rem;
   flex: none;
+  background: var(--check-badge) center / contain no-repeat;
+  transition: opacity var(--t-pop) var(--ease-out);
 }
 
 /* ================= 岗位卡片 ================= */
 .job {
   display: flex;
-  gap: 0.9rem;
+  gap: 0.85rem;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--line);
   border-radius: var(--radius);
-  padding: 1.1rem;
+  box-shadow: var(--shadow-card);
+  padding: 1.05rem;
   margin-bottom: 0.9rem;
   align-items: flex-start;
   cursor: pointer;
@@ -448,7 +688,7 @@ textarea.input {
   flex: none;
   width: 2.6rem;
   height: 2.6rem;
-  border: 1px solid var(--line-2);
+  border: 2px solid var(--line-2);
   border-radius: 50%;
   background: var(--surface);
   font-size: 0;                        /* 里头的 ✓ 字符不显示，改用 CSS 画的勾 */
@@ -456,6 +696,8 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background var(--t-pop) var(--ease-out),
+    border-color var(--t-pop) var(--ease-out);
 }
 .job-pick::before {
   content: '';
@@ -484,6 +726,12 @@ textarea.input {
   flex: 1;
   min-width: 0;
 }
+/* 标题行：左边标题+徽章，右边评分块 */
+.job-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
 .job-title {
   font-size: 1.15rem;
   font-weight: 700;
@@ -493,6 +741,8 @@ textarea.input {
   align-items: center;
   gap: 0.4rem;
   letter-spacing: -0.01em;
+  flex: 1;
+  min-width: 0;
 }
 .job-company {
   font-size: 0.95rem;
@@ -506,25 +756,81 @@ textarea.input {
 .job-line .k {
   color: var(--ink-2);
 }
+/* 右上角评分块：大数字 + 实色等级条（效果图 86 分/很适合、78 分/较适合） */
+.job-score {
+  flex: none;
+  margin-left: auto;
+  text-align: center;
+  min-width: 4.8rem;
+  padding: 0.45rem 0.55rem 0.55rem;
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+.job-score b {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.job-score b i {
+  font-style: normal;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-left: 0.08rem;
+}
+.job-score .lvl {
+  display: block;
+  margin-top: 0.28rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #fff;
+  background: var(--ink-3);
+  border-radius: 0.45rem;
+  padding: 0.08rem 0.4rem;
+  white-space: nowrap;
+}
+.job-score.good b { color: var(--accent); }
+.job-score.good .lvl { background: var(--accent); }
+.job-score.mid  b { color: var(--warn-7); }
+.job-score.mid  .lvl { background: var(--warn-7); }
+.job-score.low  b { color: var(--ink-2); }
+.job-score.low  .lvl { background: var(--ink-3); }
+
 .score {
   font-weight: 700;
   font-size: 1rem;
 }
-.score.good { color: var(--accent); }
+.score.good { color: var(--accent-7); }
 .score.mid { color: var(--warn); }
 .score.low { color: var(--ink-2); }
+
+/* 适合原因：浅蓝面板（效果图「适合原因」块） */
+.job-why {
+  background: var(--primary-1);
+  border-radius: 0.7rem;
+  padding: 0.6rem 0.75rem 0.55rem;
+  margin-top: 0.55rem;
+}
+.job-why-t {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--primary-7);
+  margin: 0 0 0.2rem;
+}
 
 .badge {
   display: inline-block;
   font-size: 0.8rem;
   font-weight: 700;
-  padding: 0.1rem 0.55rem;
-  border-radius: var(--radius-sm);
-  margin-right: 0.35rem;
+  padding: 0.1rem 0.6rem;
+  border-radius: var(--radius-pill);
+  margin-right: 0.15rem;
   white-space: nowrap;
 }
-.badge-central { background: var(--accent-1); color: #0f7a41; }
-.badge-state { background: var(--primary-1); color: var(--primary-7); }
+.badge-central { background: var(--accent-1); color: var(--accent-7); }
+.badge-state { background: #dff0fd; color: var(--primary-7); }
 .badge-foreign { background: #f2ecfb; color: #5b2fa8; }
 .badge-institution { background: #e6f6f1; color: #0a7a60; }
 .badge-civil { background: #fceef4; color: #9c2a5e; }
@@ -541,30 +847,28 @@ textarea.input {
   margin-left: 8px;
   padding: 2px 10px;
   border: 1px solid var(--primary-7);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--primary-7);
   font-size: .88rem;
   text-decoration: none;
 }
 
-/* 推荐理由：前头那个 ✓ 换成 CSS 画的勾 */
+/* 推荐理由：前头那个 ✓ 用 SVG 蓝勾（和 chips 同一颗） */
 .reason {
   font-size: 0.9rem;
   color: var(--primary-7);
-  margin: 0.2rem 0;
+  margin: 0.22rem 0;
   display: flex;
   align-items: flex-start;
-  gap: 0.4rem;
+  gap: 0.42rem;
 }
 .reason::before {
   content: '';
-  width: 0.36rem;
-  height: 0.62rem;
-  border: solid currentColor;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-  margin-top: 0.42rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-top: 0.22rem;
   flex: none;
+  background: var(--check-badge) center / contain no-repeat;
 }
 /* 提醒：前头一个圆点，同样是 CSS 画的 */
 .tip-line {
@@ -587,7 +891,7 @@ textarea.input {
 
 /* ================= 进度 ================= */
 .progress {
-  height: 1.4rem;
+  height: 1.1rem;
   background: var(--surface-2);
   border-radius: var(--radius-pill);
   overflow: hidden;
@@ -600,7 +904,7 @@ textarea.input {
   display: block;
   width: 100%;
   height: 100%;
-  background: var(--primary);
+  background: linear-gradient(90deg, #2fc47f, var(--accent));
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 240ms var(--ease-out);
@@ -608,41 +912,73 @@ textarea.input {
 .result-item {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 0.8rem;
-  padding: 0.7rem 0;
+  padding: 0.7rem 0.15rem;
   border-bottom: 1px solid var(--line);
   font-size: 0.98rem;
 }
+.result-item:last-child { border-bottom: none; }
 .result-item .ok {
-  color: var(--accent);
+  color: var(--accent-7);
   font-weight: 700;
 }
 
-/* ================= 底部行动条 ================= */
+/* ================= 底部行动条：白色操作栏 ================= */
 .navbar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   background: var(--surface);
-  border-top: 1px solid var(--line);
+  border-top: none;
   /* env(safe-area-inset-bottom)：iPhone 底部小黑条，不加会把「下一步」挡住 */
-  padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
+  padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom));
   display: flex;
-  gap: 0.8rem;
+  flex-direction: column;
+  gap: 0.55rem;
+  /* 唯一的投影：让操作栏从内容上浮起来 */
+  box-shadow: 0 -6px 18px rgba(23, 78, 148, 0.08);
   z-index: 20;
 }
-.navbar::before {
-  /* 唯一一处投影：让行动条从内容上浮起来 */
-  content: '';
-  position: absolute;
-  inset: -8px 0 auto;
-  height: 8px;
-  background: linear-gradient(rgba(18, 38, 58, 0), rgba(18, 38, 58, 0.06));
-  pointer-events: none;
+.navbar-btns {
+  display: flex;
+  gap: 0.8rem;
 }
 .navbar .btn {
   flex: 1;
+}
+/* 「上一步」= 白底蓝字蓝描边（效果图） */
+.navbar .btn:not(.btn-primary) {
+  background: var(--surface);
+  border-color: var(--primary);
+  color: var(--primary-7);
+}
+/* 第 2 步的「当前选择偏好」小条（效果图） */
+.pref {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border-radius: 0.7rem;
+  padding: 0.5rem 0.7rem;
+}
+.pref b { color: var(--primary-7); }
+.pref-t {
+  flex: none;
+  font-weight: 700;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.pref-t::before {
+  content: '';
+  width: 1.05rem;
+  height: 1.05rem;
+  background: var(--check-badge) center / contain no-repeat;
 }
 
 /* ================= 桌面端（≥1024px） =================
@@ -651,21 +987,17 @@ textarea.input {
   .shell {
     padding-inline: 1.5rem;
   }
-  .topbar {
-    padding-top: 2rem;
+  .topbar-in {
+    padding: 1.9rem 1.5rem 1.9rem;
   }
   .topbar h1 {
-    font-size: 1.7rem;
+    font-size: 1.8rem;
   }
   .card {
     padding: 1.6rem 1.5rem;
   }
   .card-title {
     font-size: 1.3rem;
-  }
-  .stepbar .s {
-    font-size: 0.95rem;
-    padding: 0.65rem 0.9rem;
   }
   /* 岗位列表在宽屏排两列，一屏能比对更多 */
   .shell.wide .job-list {
@@ -681,46 +1013,68 @@ textarea.input {
 /* ================= 手机适配（≤480px） =================
    单列、贴边、触控目标不缩水 */
 @media (max-width: 480px) {
+  .topbar-in {
+    padding: 1.15rem 0.85rem 1.3rem;
+  }
+  .topbar h1 {
+    font-size: 1.38rem;
+  }
+  .topbar .sub {
+    font-size: 0.82rem;
+  }
+  .btn-hero {
+    min-height: 2.45rem;
+    padding: 0 0.8rem;
+    font-size: 0.9rem;
+  }
+  .hero-doc {
+    width: 3.6rem;
+    height: 4.4rem;
+    right: 4.4rem;
+    bottom: -1.4rem;
+  }
+  .hero-lens {
+    width: 2rem;
+    height: 2rem;
+    border-width: 0.4rem;
+    right: 1.1rem;
+    bottom: 0.7rem;
+  }
   .shell {
     padding-inline: 0.85rem;
   }
-  .topbar {
-    padding-top: 1rem;
-    align-items: flex-start;
-  }
-  .topbar h1 {
-    font-size: 1.3rem;
-  }
-  .topbar .sub {
-    font-size: 0.8rem;
-  }
-  .topbar-actions .btn-mini {
-    padding: 0 0.7rem;
-  }
   .stepbar {
+    gap: 0;
+    margin-top: 0.9rem;
+  }
+  .stepbar .s {
+    font-size: 0.75rem;
     gap: 0.3rem;
   }
-  /* 窄屏把「序号」和「文字」竖着排。横排时 4 个步骤（圆圈+文字+留白）
-     加起来会超出 320px 屏宽被裁掉；竖排后每项只占文字宽度，四个放得下，
-     而且不用把文字藏掉 —— 这批用户靠文字认步骤。 */
-  .stepbar .s {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 0.2rem;
-    font-size: 0.75rem;
-    padding: 0.45rem 0.2rem;
-  }
   .stepbar .s .n {
-    width: 1.45rem;
-    height: 1.45rem;
-    font-size: 0.78rem;
+    width: 1.85rem;
+    height: 1.85rem;
+    font-size: 0.85rem;
+  }
+  .stepbar .s:not(:last-child)::after {
+    top: 0.95rem;
+    left: calc(50% + 1.25rem);
+    right: calc(-50% + 1.25rem);
   }
   .card {
     padding: 1.05rem 0.9rem;
   }
   .card-title {
     font-size: 1.12rem;
+  }
+  .tile {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.6rem;
+  }
+  .tile svg {
+    width: 1.1rem;
+    height: 1.1rem;
   }
   .btn-big {
     min-height: 4rem;
@@ -733,6 +1087,11 @@ textarea.input {
   .job-title {
     font-size: 1.05rem;
   }
+  .job-score {
+    min-width: 4.2rem;
+    padding: 0.35rem 0.45rem 0.45rem;
+  }
+  .job-score b { font-size: 1.3rem; }
   .chip {
     padding: 0 0.95rem;
   }
@@ -743,24 +1102,31 @@ textarea.input {
     gap: 0.5rem;
     padding-inline: 0.7rem;
   }
+  .navbar-btns {
+    gap: 0.5rem;
+  }
   .navbar .btn {
     font-size: 0.98rem;
     padding: 0 0.7rem;
     white-space: nowrap;
   }
+  .pref {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
+  }
 }
 
 /* 小屏（320 / 360）：再收一档，保证仍然不折行 */
 @media (max-width: 360px) {
-  .navbar .btn {
+  .navbar-btns .btn {
     font-size: 0.9rem;
     padding: 0 0.5rem;
   }
   .topbar h1 {
-    font-size: 1.18rem;
+    font-size: 1.25rem;
   }
   .stepbar .s {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
   }
 }
 
@@ -780,13 +1146,25 @@ textarea.input {
     border-color: var(--primary-7);
     color: #fff;
   }
-  .stepbar .s.back:hover {
-    border-color: var(--primary);
+  .btn-outline:hover {
     background: var(--primary-1);
+  }
+  .btn-hero:hover {
+    box-shadow: 0 3px 10px rgba(9, 55, 120, 0.25);
+  }
+  .stepbar .s.back:hover {
+    color: var(--primary);
+  }
+  .stepbar .s.back:hover .n {
+    border-color: var(--primary);
+    color: var(--primary);
   }
   .chip:hover {
     border-color: var(--primary);
     color: var(--primary-7);
+  }
+  .chip.on:hover {
+    border-color: transparent;
   }
   .job:hover {
     border-color: var(--line-2);
@@ -857,10 +1235,12 @@ textarea.input {
   }
   /* 所有按下缩放取消 —— 缩放也是空间运动 */
   .btn:active,
+  .btn-hero:active,
   .chip:active,
   .job:active,
   .pbtn:active,
-  .job-go:active {
+  .job-go:active,
+  .stepbar .s.back:active .n {
     transform: none !important;
   }
   /* 加载圈（.pull-spin）不在这里恢复：它的 keyframes 定义在 Step3 的

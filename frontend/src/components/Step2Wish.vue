@@ -1,7 +1,18 @@
 <template>
   <div>
     <div class="card">
-      <h2 class="card-title">第 2 步 · 想去什么样的单位</h2>
+      <div class="card-head">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+            <path d="M16 9h3a1 1 0 0 1 1 1v11" />
+            <path d="M2 21h20" />
+            <path d="M8 7h2M8 11h2M8 15h2" />
+          </svg>
+        </span>
+        <h2 class="card-title">想去什么样的单位<span class="soft">可多选</span></h2>
+      </div>
       <p class="card-hint">你只要央企、国企、外企，下面已经帮你选好了。想改就点一下。</p>
 
       <div class="field">
@@ -29,21 +40,41 @@
     </div>
 
     <div class="card">
-      <h2 class="card-title">想做什么工作</h2>
+      <div class="card-head">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7.5" height="7.5" rx="1.6" />
+            <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6" />
+            <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6" />
+            <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6" />
+          </svg>
+        </span>
+        <h2 class="card-title">想做什么工作<span class="soft">可多选</span></h2>
+      </div>
       <p class="card-hint">可以多选，比如又想开车又想做保安都行。</p>
       <div class="chips">
         <button v-for="t in JOB_TYPES" :key="t" class="chip" :class="{ on: p.jobTypes.includes(t) }"
           @click="toggle(p.jobTypes, t)">{{ t }}</button>
       </div>
       <div class="field" style="margin-top:1rem;">
-        <label for="f15">上面没有你想做的？自己填</label>
+        <label for="f15">上面没有你想做的？自己填关键词</label>
         <p class="tip">填一个词（比如「数控车床」「食堂帮厨」），就按这个词帮你找岗位；跟上面选的可以一起用。</p>
-        <input id="f15" class="input" v-model="p.keyword" placeholder="例如：数控车床、叉车、食堂帮厨" />
+        <input id="f15" class="input input-search" v-model="p.keyword" placeholder="请输入职位关键词，例如：工程师、策划、助理" />
       </div>
     </div>
 
     <div class="card">
-      <h2 class="card-title">在哪个城市找</h2>
+      <div class="card-head">
+        <span class="tile tile-cyan" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21s-7-5.4-7-11a7 7 0 0 1 14 0c0 5.6-7 11-7 11z" />
+            <circle cx="12" cy="10" r="2.6" />
+          </svg>
+        </span>
+        <h2 class="card-title">在哪个城市找<span class="soft">选一个</span></h2>
+      </div>
       <p class="card-hint">选「不限城市」可以看到全国的岗位，适合愿意去外地的。</p>
       <div class="chips">
         <button v-for="c in CITIES" :key="c" class="chip" :class="{ on: p.city === c }"

@@ -17,7 +17,7 @@
       @keydown.enter.prevent="canGo(s.n) && go(s.n)"
       @keydown.space.prevent="canGo(s.n) && go(s.n)"
     >
-      <span class="n">{{ s.n }}</span>{{ s.t }}
+      <span class="n">{{ s.n }}</span><span class="t">{{ s.t }}</span>
     </div>
   </div>
 </template>

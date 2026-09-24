@@ -13,13 +13,22 @@
            库里 2749 个岗位只有 14 个有报名邮箱，所以大多数时候那一组压根不出现，
            用户找遍这一屏也找不到「在哪儿设置邮箱」。入口必须与内容无关地常驻。 -->
       <div class="card-head">
+        <span class="tile tile-purple" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 3 10.5 13.5" />
+            <path d="M21 3 14 21l-3.5-7.5L3 10z" />
+          </svg>
+        </span>
         <h2 class="card-title">第 4 步 · 去投递</h2>
-        <button class="btn btn-mini setup-btn" :class="{ on: mailReady }" @click="openSetup">
-          {{ setupBtnText }}
-        </button>
-        <button class="btn btn-mini setup-btn" :class="{ on: llmReady }" @click="openLlm">
-          配置 AI
-        </button>
+        <span class="head-btns">
+          <button class="btn btn-mini setup-btn" :class="{ on: mailReady }" @click="openSetup">
+            {{ setupBtnText }}
+          </button>
+          <button class="btn btn-mini setup-btn" :class="{ on: llmReady }" @click="openLlm">
+            配置 AI
+          </button>
+        </span>
       </div>
       <p class="card-hint">
         你选了 {{ jobs.length }} 个单位。能不能替你代投，看公告里有没有留报名邮箱——
@@ -29,6 +38,13 @@
       <!-- ---- 组 1：公告里留了报名邮箱 → 能替你代投 ---- -->
       <div v-if="mailJobs.length" class="group">
         <div class="group-head">
+          <span class="tile tile-green tile-sm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 3 10.5 13.5" />
+              <path d="M21 3 14 21l-3.5-7.5L3 10z" />
+            </svg>
+          </span>
           <span class="tag tag-ok">能代投</span>
           <b class="group-count">{{ mailJobs.length }} 个</b>
         </div>
@@ -81,7 +97,7 @@
                替原简历当附件发出去。事实门没过的岗位退回原件（绝不发编造内容）。 -->
           <div class="cfg-block" style="margin-top:.9rem;">
             <label class="switch-row">
-              <input type="checkbox" v-model="tailorOn" @change="onTailorToggle" />
+              <input type="checkbox" class="switch" v-model="tailorOn" @change="onTailorToggle" />
               <span>按岗位定制简历（AI 据招聘要求改写/重排，生成专版附件）</span>
             </label>
             <p class="muted" v-if="tailorOn && !llmReady" style="margin:.4rem 0 0;">
@@ -143,6 +159,13 @@
       <!-- ---- 组 2：没留邮箱 → 只能自己去官网投（自动填表帮忙） ---- -->
       <div v-if="linkJobs.length" class="group">
         <div class="group-head">
+          <span class="tile tile-sm" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 14a5 5 0 0 0 7.1 0l2.4-2.4a5 5 0 0 0-7.1-7.1L11 5.9" />
+              <path d="M14 10a5 5 0 0 0-7.1 0l-2.4 2.4a5 5 0 0 0 7.1 7.1L13 18.1" />
+            </svg>
+          </span>
           <span class="tag tag-link">要自己去官网投</span>
           <b class="group-count">{{ linkJobs.length }} 个</b>
         </div>
@@ -1322,8 +1345,25 @@ function badgeClass(n) {
   margin-bottom: .35rem;
 }
 .card-head .card-title { margin: 0; }
+.head-btns {
+  margin-left: auto;
+  display: flex;
+  gap: .4rem;
+  flex-shrink: 0;
+}
 .setup-btn { flex: none; }
 .setup-btn.on { background: var(--accent-1); border-color: var(--accent-7); color: var(--accent-7); }
+
+/* 分组标题里的小号图标块（tile-sm：比卡片头的 2.3rem 小一号） */
+.tile-sm {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.55rem;
+}
+.tile-sm svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
 
 /* —— 弹窗 ——
    入场用 @starting-style（CSS 原生进场，不需要 JS 里 setMounted）。
@@ -1580,10 +1620,9 @@ function badgeClass(n) {
 
 /* —— 按岗位定制简历 —— */
 .switch-row {
-  display: flex; align-items: center; gap: .5rem;
+  display: flex; align-items: center; gap: .6rem;
   font-size: .95rem; cursor: pointer; line-height: 1.5;
 }
-.switch-row input { width: 1.05rem; height: 1.05rem; }
 .tailor-reports { margin-top: .6rem; }
 .tailor-card {
   border: 1px solid var(--line); border-radius: var(--radius-sm);

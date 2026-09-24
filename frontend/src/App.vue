@@ -1,15 +1,18 @@
 <template>
-  <div class="shell" :class="{ wide: store.step === 3 }">
-    <header class="topbar">
+  <!-- hero 顶栏：蓝色渐变、全宽铺开（效果图）。装饰是纯 CSS 画的纸+放大镜 -->
+  <header class="topbar" :class="{ wide: store.step === 3 }">
+    <span class="hero-doc" aria-hidden="true"></span>
+    <span class="hero-lens" aria-hidden="true"></span>
+    <div class="topbar-in">
       <div>
         <h1>找工作助手</h1>
-        <p class="sub">跟着 4 步走，不用会打字也能投简历</p>
+        <p class="sub">帮您准备简历、筛选合适的单位和岗位<br />一步一步完成投递，找工作更轻松</p>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-mini" @click="toggleFont" :aria-pressed="store.bigFont">
+        <button class="btn-hero" @click="toggleFont" :aria-pressed="store.bigFont">
           {{ store.bigFont ? 'A-' : 'A+' }}
         </button>
-        <button class="btn btn-mini" @click="readAloud" v-if="canSpeak" aria-label="朗读这一步的说明">
+        <button class="btn-hero" @click="readAloud" v-if="canSpeak" aria-label="朗读这一步的说明">
           <!-- 禁 emoji 当图标：用 SVG 喇叭 -->
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -17,11 +20,13 @@
             <path d="M15.5 9a4 4 0 0 1 0 6" />
             <path d="M18 6.5a7.5 7.5 0 0 1 0 11" />
           </svg>
-          读
+          朗读
         </button>
       </div>
-    </header>
+    </div>
+  </header>
 
+  <div class="shell" :class="{ wide: store.step === 3 }">
     <StepBar />
 
     <Step1Profile v-if="store.step === 1" />
@@ -35,15 +40,22 @@
       <p class="finding-w">已经跑了 {{ waited }} 秒。一般十来秒就好，找到会一次全给你。如果最后显示 0 个，说明当前意向确实没有正在报名的岗位——不是程序出错，换个城市或工种再试。</p>
     </div>
 
-    <p v-if="store.err" class="err" style="text-align:center; font-size:1.05rem;">
+    <p v-if="store.err" class="err-banner">
       {{ store.err }}
     </p>
 
     <nav class="navbar" v-if="store.step < 4">
-      <button class="btn" v-if="store.step > 1" @click="go(store.step - 1)">上一步</button>
-      <button class="btn btn-primary" :disabled="store.loading" @click="next">
-        {{ store.loading ? '正在找…' : nextText }}
-      </button>
+      <!-- 第 2 步：当前选择偏好一览（效果图的小条） -->
+      <div v-if="store.step === 2" class="pref">
+        <span class="pref-t">当前选择偏好</span>
+        <span>已选 <b>{{ p.nature.length }}</b> 类单位性质<template v-if="p.hireType">、<b>1</b> 种用工方式</template><template v-if="p.jobTypes.length">、<b>{{ p.jobTypes.length }}</b> 类工作</template><template v-if="cityNow">、城市 <b>{{ cityNow }}</b></template></span>
+      </div>
+      <div class="navbar-btns">
+        <button class="btn" v-if="store.step > 1" @click="go(store.step - 1)">上一步</button>
+        <button class="btn btn-primary" :disabled="store.loading" @click="next">
+          {{ store.loading ? '正在找…' : nextText }}
+        </button>
+      </div>
     </nav>
   </div>
 </template>
@@ -65,6 +77,10 @@ const HINTS = {
   3: '第三步，这些是给你挑出来的岗位，越靠上越合适。点圆圈选中要投的，选好点去投递。',
   4: '第四步，点开始投递，系统一家一家帮你投，等进度条走完就好了。'
 }
+
+// 第 2 步底部「当前选择偏好」小条用
+const p = store.profile
+const cityNow = computed(() => effectiveCity() || '不限城市')
 
 const nextText = computed(() => {
   if (store.step === 1) return '下一步：选单位'

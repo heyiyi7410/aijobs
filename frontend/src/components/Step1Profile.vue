@@ -1,28 +1,41 @@
 <template>
   <div>
     <div class="card">
-      <h2 class="card-title">第 1 步 · 说说你的情况</h2>
+      <div class="card-head">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V5" /><path d="m7 9 5-5 5 5" />
+            <path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+          </svg>
+        </span>
+        <h2 class="card-title">上传简历并智能解析</h2>
+      </div>
+      <p class="card-hint">支持 PDF、Word、txt、md 格式，自动读取简历信息。手机或电脑里那份简历都可以，我读一遍，把名字、电话、邮箱这些自动填到下面，你只要核对一下。</p>
 
       <!-- ============ 有简历就先传，省得打字 ============ -->
       <div class="up-box">
-        <p class="up-lead">有简历的话，传上来就行</p>
-        <p class="up-hint">
-          手机或电脑里那份简历都可以，PDF 或 Word 文件。我读一遍，
-          把名字、电话、邮箱这些自动填到下面，你只要核对一下。
-        </p>
-
         <input ref="fileEl" class="up-file" type="file"
                accept=".pdf,.docx,.txt,.md" @change="onPick">
-        <button class="btn btn-primary btn-big" :disabled="busy" @click="fileEl.click()">
-          {{ busy ? '正在读，稍等一下…' : '选简历文件' }}
+        <button class="up-btn" :disabled="busy" @click="fileEl.click()">
+          <!-- 云朵上传图标：SVG 画，不用字符 -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6.8 19a4.3 4.3 0 0 1-.6-8.6 5.5 5.5 0 0 1 10.8-1.2A4.6 4.6 0 0 1 17 19z" />
+            <path d="M12 12.5V20" /><path d="m8.8 15.6 3.2-3.2 3.2 3.2" />
+          </svg>
+          <span class="up-btn-t">
+            <b>{{ busy ? '正在读，稍等一下…' : '点击上传简历' }}</b>
+            <small>支持 PDF / Word / txt / md</small>
+          </span>
         </button>
-        <p class="up-hint" style="margin-top:.5rem;">
+        <p class="up-hint" style="margin:.55rem 0 0;">
           不会找文件？让身边年轻人帮你点一下，或者跳过这步，下面照着填也很快。
         </p>
 
         <label class="up-keep">
-          <input type="checkbox" v-model="keepResume">
-          留着这份简历，自动投的时候直接用它
+          <input type="checkbox" class="switch" v-model="keepResume">
+          <span>留着这份简历，自动投的时候直接用它</span>
         </label>
         <p class="up-hint" style="margin:.35rem 0 0;">
           留着的话，单位收到的就是你这份原件（照片、排版都在）。
@@ -31,9 +44,21 @@
 
         <p v-if="msg" class="up-msg" :class="isWarn ? 'up-warning' : 'up-ok'">{{ msg }}</p>
         <p v-if="err" class="up-msg up-err">{{ err }}</p>
+      </div>
 
-        <div v-if="got.length" class="up-got">
-          <p class="up-sub">从简历里读到的（{{ got.length }} 项）</p>
+      <!-- ============ 简历读到的：单独一张卡（效果图） ============ -->
+      <div v-if="got.length" class="card">
+        <div class="card-head">
+          <span class="tile tile-green" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+              <path d="M14 3v5h5" />
+            </svg>
+          </span>
+          <h2 class="card-title">简历读到的<span class="soft">核对一下</span></h2>
+        </div>
+        <div class="up-got">
           <div v-for="g in got" :key="g.key" class="up-row">
             <span>{{ g.label }}</span>
             <span :class="low.includes(g.key) ? 'up-warn' : 'up-val'">
@@ -44,6 +69,17 @@
             下面已经照着填好了，从头到尾看一遍，有不对的直接改。
           </p>
         </div>
+      </div>
+
+      <div class="card-head">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M5 21c0-3.9 3.1-7 7-7s7 3.1 7 7" />
+          </svg>
+        </span>
+        <h2 class="card-title">基本信息<span class="soft">带 * 为必填</span></h2>
       </div>
 
       <p class="up-or">
@@ -280,7 +316,15 @@
     </div>
 
     <div class="card">
-      <h2 class="card-title">你会做什么</h2>
+      <div class="card-head">
+        <span class="tile tile-cyan" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3 2.7 5.7 6.3.8-4.6 4.3 1.2 6.2-5.6-3-5.6 3 1.2-6.2L3 9.5l6.3-.8z" />
+          </svg>
+        </span>
+        <h2 class="card-title">你会做什么</h2>
+      </div>
       <p class="card-hint">会的都点上，点得越多，找得越准。没有合适的可以跳过。</p>
       <div class="chips">
         <button v-for="s in SKILLS" :key="s" class="chip" :class="{ on: p.skills.includes(s) }"
@@ -496,29 +540,47 @@ onUnmounted(stopMic)
 </script>
 
 <style scoped>
+/* 上传区：浅蓝底 + 蓝虚线框（效果图的拖放区） */
 .up-box {
   background: var(--surface-2);
-  border: 2px solid var(--line);
+  border: 2px dashed #a9c9f6;
   border-radius: 0.9rem;
   padding: 1rem;
   margin-bottom: 1.3rem;
 }
-.up-lead {
-  font-size: 1.15rem;
-  font-weight: 700;
-  margin: 0 0 0.35rem;
+/* 整块可点的大按钮：云朵图标 + 主文案 + 格式小字（效果图） */
+.up-btn {
+  width: 100%;
+  min-height: 4.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  border: 1.5px solid #bcd7fa;
+  border-radius: 0.8rem;
+  background: var(--surface);
+  color: var(--primary-7);
+  cursor: pointer;
+  transition: background var(--t-pop) var(--ease-out),
+    transform var(--t-press) var(--ease-out);
 }
+.up-btn:active { transform: scale(0.98); }
+.up-btn:disabled { cursor: wait; opacity: 0.75; }
+.up-btn svg { width: 2rem; height: 2rem; flex: none; color: var(--primary); }
+.up-btn-t { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.35; }
+.up-btn-t b { font-size: 1.12rem; font-weight: 700; }
+.up-btn-t small { font-size: 0.85rem; color: var(--ink-2); }
 .up-hint {
   font-size: 0.95rem;
-  color: var(--text-2);
+  color: var(--ink-2);
   margin: 0 0 0.9rem;
   line-height: 1.6;
 }
 .up-keep {
-  display: flex; align-items: flex-start; gap: .5rem; margin-top: .9rem;
-  font-size: .98rem; font-weight: 600; color: var(--primary);
+  display: flex; align-items: center; gap: .6rem; margin-top: .95rem;
+  font-size: .98rem; font-weight: 600; color: var(--ink);
+  cursor: pointer;
 }
-.up-keep input { width: 1.15rem; height: 1.15rem; margin-top: .12rem; flex: 0 0 auto; }
 .up-file { display: none; }
 .up-msg {
   border-radius: 0.6rem;
@@ -526,34 +588,32 @@ onUnmounted(stopMic)
   margin: 0.9rem 0 0;
   font-size: 0.98rem;
 }
-.up-ok { background: var(--accent-1); border: 1px solid var(--accent-1); color: var(--success); }
-.up-err { background: var(--danger-1); border: 1px solid var(--danger-1); color: var(--danger); }
+.up-ok { background: var(--accent-1); border: 1px solid var(--accent-1); color: var(--accent-7); }
+.up-err { background: var(--danger-1); border: 1px solid var(--danger-1); color: var(--danger-7); }
 /* 提醒（这份文件不像简历）—— 用黄色，别让人误当成「读好了」 */
 .up-warning { background: var(--warn-1); border: 1px solid var(--warn-1); color: var(--warn); }
 .up-got {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--surface-2);
   border-radius: 0.7rem;
   padding: 0.9rem 1rem;
-  margin-top: 0.9rem;
 }
 .up-sub { font-weight: 700; margin: 0 0 0.5rem; }
 .up-row {
   display: flex;
   justify-content: space-between;
   gap: 0.8rem;
-  padding: 0.3rem 0;
+  padding: 0.32rem 0;
   font-size: 0.98rem;
   border-bottom: 1px dashed var(--line);
 }
 .up-row:last-of-type { border-bottom: none; }
-.up-val { color: var(--success); font-weight: 700; text-align: right; }
+.up-val { color: var(--accent-7); font-weight: 700; text-align: right; }
 .up-warn { color: var(--warn); font-weight: 700; text-align: right; }
 .up-or {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  color: var(--text-2);
+  color: var(--ink-2);
   font-size: 0.92rem;
   margin: 0 0 1.1rem;
 }
@@ -568,7 +628,7 @@ onUnmounted(stopMic)
 .up-tag {
   font-size: 0.72rem;
   font-weight: 400;
-  color: var(--success);
+  color: var(--accent-7);
   background: var(--accent-1);
   border-radius: 0.4rem;
   padding: 0.1rem 0.35rem;
