@@ -1356,6 +1356,34 @@ function badgeClass(n) {
 .setup-btn { flex: none; }
 .setup-btn.on { background: var(--accent-1); border-color: var(--accent-7); color: var(--accent-7); }
 
+@media (max-width: 430px) {
+  .head-btns {
+    width: 100%;
+    margin-left: 0;
+  }
+  .head-btns .setup-btn {
+    flex: 1;
+  }
+  .group-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .group-title {
+    flex: 1 1 9rem;
+  }
+  .group-count {
+    margin-left: auto;
+  }
+  .result-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .2rem;
+  }
+  .ri-extra {
+    text-align: left;
+  }
+}
+
 /* 分组标题里的小号图标块（tile-sm：比卡片头的 2.3rem 小一号） */
 .tile-sm {
   width: 1.9rem;
