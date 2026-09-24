@@ -20,7 +20,7 @@
             <path d="M21 3 14 21l-3.5-7.5L3 10z" />
           </svg>
         </span>
-        <h2 class="card-title">第 4 步 · 去投递</h2>
+        <h2 class="card-title">去投递</h2>
         <span class="head-btns">
           <button class="btn btn-mini setup-btn" :class="{ on: mailReady }" @click="openSetup">
             {{ setupBtnText }}
@@ -45,7 +45,8 @@
               <path d="M21 3 14 21l-3.5-7.5L3 10z" />
             </svg>
           </span>
-          <span class="tag tag-ok">能代投</span>
+          <span class="group-title">能代投（有邮箱）</span>
+          <span class="tag tag-ok">推荐</span>
           <b class="group-count">{{ mailJobs.length }} 个</b>
         </div>
         <p class="group-note">
@@ -166,7 +167,7 @@
               <path d="M14 10a5 5 0 0 0-7.1 0l-2.4 2.4a5 5 0 0 0 7.1 7.1L13 18.1" />
             </svg>
           </span>
-          <span class="tag tag-link">要自己去官网投</span>
+          <span class="group-title">去官网投（无邮箱）</span>
           <b class="group-count">{{ linkJobs.length }} 个</b>
         </div>
         <p class="group-note">
