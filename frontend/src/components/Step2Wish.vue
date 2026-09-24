@@ -30,7 +30,7 @@
             <path d="M3 12.5h18" />
           </svg>
         </span>
-        <h2 class="card-title">用工方式<span class="soft">可多选</span></h2>
+        <h2 class="card-title">用工方式</h2>
       </div>
       <p class="card-hint">直签是直接跟单位签合同；选“都可以”时，也会把劳务派遣岗位一起纳入。</p>
       <div class="chips">
@@ -72,7 +72,7 @@
             <circle cx="12" cy="10" r="2.6" />
           </svg>
         </span>
-        <h2 class="card-title">城市<span class="soft">可多选</span></h2>
+        <h2 class="card-title">城市<span class="soft">选一个</span></h2>
       </div>
       <div class="chips">
         <button v-for="c in CITIES" :key="c" class="chip" :class="{ on: p.city === c }"
@@ -102,7 +102,7 @@
             <path d="M4 7h16M5 12h14M7 17h10" />
           </svg>
         </span>
-        <h2 class="card-title">期望月薪<span class="soft">可多选</span></h2>
+        <h2 class="card-title">期望月薪<span class="soft">选一个</span></h2>
       </div>
       <div class="chips">
         <button v-for="s in SALARIES" :key="s" class="chip" :class="{ on: p.salary === s }"
