@@ -90,9 +90,17 @@
         <label for="f1">你叫什么名字<span class="req">*</span><Tag k="name" /></label>
         <div style="display:flex; gap:.6rem;">
           <input id="f1" class="input" v-model="p.name" placeholder="例如：张三" />
-          <button v-if="canRec" class="btn" :class="{ 'btn-primary': mic === 'name' }"
-            style="flex:0 0 auto; padding:0 .9rem;" @click="toggleMic('name')">
-            {{ mic === 'name' ? '说完点这停' : '🎤 说' }}
+          <button v-if="canRec" class="btn mic-btn" :class="{ 'btn-primary': mic === 'name' }"
+            style="flex:0 0 auto; padding:0 .9rem;" @click="toggleMic('name')"
+            :aria-label="mic === 'name' ? '停止语音输入' : '开始语音输入'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="3" width="6" height="11" rx="3" />
+              <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0" />
+              <path d="M12 17v4" />
+              <path d="M9 21h6" />
+            </svg>
+            <span>{{ mic === 'name' ? '停止' : '语音' }}</span>
           </button>
         </div>
       </div>
