@@ -377,6 +377,18 @@
       </div>
     </div>
 
+    <div v-if="mode === 'idle'" class="step4-footer" aria-label="投递操作">
+      <button class="btn" @click="go(3)">上一步</button>
+      <button v-if="mailJobs.length" class="btn btn-primary"
+        :disabled="busy" @click="mailReady ? sendAll() : openSetup()">
+        {{ mailReady ? ('一键代投这 ' + mailJobs.length + ' 个') : '设置发件邮箱' }}
+      </button>
+      <button v-else-if="linkJobs.length" class="btn btn-primary" @click="startLink">
+        开始逐个投递
+      </button>
+      <button v-else class="btn btn-primary" disabled>完成</button>
+    </div>
+
     <!-- ============ 弹窗 1：设置发件邮箱 ============
          用户 2026-09-21 反馈：第 4 步根本没有「设置邮箱」的按钮，
          配置那套表单只在「有报名邮箱的岗位存在」时才渲染，等于找不到。
@@ -1393,6 +1405,37 @@ function badgeClass(n) {
 .tile-sm svg {
   width: 1.05rem;
   height: 1.05rem;
+}
+
+/* 第 4 步底部固定操作栏：视觉与最终效果图一致，同时保持真实业务动作 */
+.step4-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  display: flex;
+  gap: .8rem;
+  padding: .7rem 1rem calc(.7rem + env(safe-area-inset-bottom));
+  background: rgba(255,255,255,.97);
+  box-shadow: 0 -6px 18px rgba(23, 78, 148, .08);
+  backdrop-filter: blur(10px);
+}
+.step4-footer .btn {
+  flex: 1;
+}
+.step4-footer .btn:not(.btn-primary) {
+  color: var(--primary-7);
+  border-color: var(--primary);
+}
+@media (min-width: 48rem) {
+  .step4-footer {
+    left: 50%;
+    right: auto;
+    width: min(46rem, 100%);
+    transform: translateX(-50%);
+    border-radius: 1rem 1rem 0 0;
+  }
 }
 
 /* —— 弹窗 ——
