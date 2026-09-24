@@ -480,7 +480,9 @@ def _resume_file_for_upload(t):
     # 1) 定制专版（路径来自后端 tailor 生成的、落在该岗位 tailored_map 里的 docx）
     tp = getattr(t, 'tailored_path', None)
     if tp and os.path.isfile(tp):
-        return tp, os.path.basename(tp)
+        # 展示名优先用前端带来的「岗位-定制版.docx」，别把内部文件名（id_jobkey.docx）给用户看
+        shown = getattr(t, 'tailored_name', '') or os.path.basename(tp)
+        return tp, shown
     raw = (t.profile.get('resume_path') or '').strip()
     if raw:
         # 只认落在我们自己 resumes 目录里的文件，避免路径被写成别的什么东西
