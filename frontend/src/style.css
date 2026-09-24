@@ -1384,3 +1384,19 @@ textarea.input {
     font-size: .82rem;
   }
 }
+
+/* Step4 最终效果图：两组投递方式的标题比状态徽章更醒目 */
+.group-title {
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.group-head .group-count {
+  margin-left: auto;
+}
+@media (max-width: 480px) {
+  .group-title {
+    font-size: 1.08rem;
+  }
+}
