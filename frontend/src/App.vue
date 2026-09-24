@@ -51,6 +51,10 @@
         <span class="pref-t">当前选择偏好</span>
         <span>已选 <b>{{ p.nature.length }}</b> 类单位性质<template v-if="p.hireType">、<b>1</b> 种用工方式</template><template v-if="p.jobTypes.length">、<b>{{ p.jobTypes.length }}</b> 类工作</template><template v-if="cityNow">、城市 <b>{{ cityNow }}</b></template></span>
       </div>
+      <div v-if="store.step === 3" class="selected-strip">
+        <span class="selected-dot" aria-hidden="true"></span>
+        <span>已选中 <b>{{ store.picked.length }}</b> 个岗位</span>
+      </div>
       <div class="navbar-btns">
         <button class="btn" v-if="store.step > 1" @click="go(store.step - 1)">上一步</button>
         <button class="btn btn-primary" :disabled="store.loading" @click="next">
