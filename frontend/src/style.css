@@ -1329,3 +1329,58 @@ textarea.input {
 @media (prefers-reduced-motion: reduce) {
   .pull-spin { animation-duration: 2.4s; }
 }
+
+/* Step2 最终效果图：独立区块、右侧帮助链接、紧凑输入区 */
+.text-link {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--primary-7);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+  padding: .45rem .25rem;
+  min-height: 2.4rem;
+}
+.compact-field {
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+.switch-card {
+  padding-block: .9rem;
+}
+.wish-switch {
+  margin: 0;
+  align-items: center;
+}
+.wish-switch > span {
+  display: flex;
+  flex-direction: column;
+  gap: .08rem;
+  min-width: 0;
+}
+.wish-switch b {
+  font-size: 1.05rem;
+}
+.wish-switch small {
+  color: var(--ink-2);
+  font-size: .86rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+@media (max-width: 480px) {
+  .card-head {
+    align-items: flex-start;
+  }
+  .text-link {
+    font-size: .82rem;
+    max-width: 8.5rem;
+    text-align: right;
+  }
+  .wish-switch b {
+    font-size: 1rem;
+  }
+  .wish-switch small {
+    font-size: .82rem;
+  }
+}
