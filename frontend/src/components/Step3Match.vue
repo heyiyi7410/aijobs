@@ -70,28 +70,25 @@
         <span class="src-dot"></span>{{ sourceLine }}
       </div>
 
-      <p v-if="relaxed && outCount" class="relax-tip">
+      <p v-if="relaxed && outCount" class="relax-tip info-blue">
         {{ cityName }}的岗位只找到 <b>{{ localCount }}</b> 个，所以另外给你带了
         <b>{{ outCount }}</b> 个其他城市的（都标着「外地」）。
         不想跑外地就点上面「只要{{ cityName }}」，这里会只留本市的。
       </p>
-      <p v-if="wideCount" class="relax-tip">
+      <p v-if="wideCount" class="relax-tip info-blue">
         里面有 <b>{{ wideCount }}</b> 个公告只写了「全国」或只写了省名
         （标着「全国招聘」「本省」）—— 里面可能有{{ cityName }}的岗位，也可能在别处，
         点开看详情里的地点再决定。只想要明确写着{{ cityName }}的，
         回第 2 步把「连全国招聘和本省其他城市一起找」取消勾选。
       </p>
-      <p v-if="droppedClosed" class="relax-tip">
+      <p v-if="droppedClosed" class="relax-tip info-green">
         已经替你剔掉 <b>{{ droppedClosed }}</b> 个投不了的岗位
         （报名还没开始或已截止）——下面这些都是现在能报的。
       </p>
-      <p v-if="usedFallback" class="relax-tip">
+      <p v-if="usedFallback" class="relax-tip info-warn">
         暂时连不上招聘网站，下面先显示的是内置示例岗位，投递前请再确认一下。
       </p>
 
-      <p class="muted" style="margin:-.4rem 0 .8rem;">
-        已选中 <b style="color:var(--primary); font-size:1.15rem;">{{ store.picked.length }}</b> 个
-      </p>
     </div>
 
     <div v-if="!shown.length" class="card center">
