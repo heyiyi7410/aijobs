@@ -36,7 +36,7 @@
       </p>
 
       <!-- ---- 组 1：公告里留了报名邮箱 → 能替你代投 ---- -->
-      <div v-if="mailJobs.length" class="group">
+      <div v-if="mailJobs.length" class="group group-mail">
         <div class="group-head">
           <span class="tile tile-green tile-sm" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -158,7 +158,7 @@
       </p>
 
       <!-- ---- 组 2：没留邮箱 → 只能自己去官网投（自动填表帮忙） ---- -->
-      <div v-if="linkJobs.length" class="group">
+      <div v-if="linkJobs.length" class="group group-link">
         <div class="group-head">
           <span class="tile tile-sm" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
