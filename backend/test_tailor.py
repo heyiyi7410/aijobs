@@ -191,6 +191,10 @@ def test_source_text_no_resume():
 
 if __name__ == '__main__':
     print('python-docx 可用:', _HAS_DOCX)
+    # 隔离 LLM 配置依赖：本机通常不配 key，但 plan() 先查 status()['ready'] 才进
+    # call_llm，不 mock 的话三个 plan 测试都会卡在「还没配置大模型」，测不到真正的
+    # 计划 / 事实门逻辑。这里把「已配置」固定住，让 mock 的 call_llm 真正接管。
+    tailor.status = lambda: {'ready': True, 'base_url': 'mock', 'model': 'mock', 'has_key': True}
     test_source_text_no_resume()
     test_plan_good()
     test_plan_fact_gate_blocks()

@@ -136,7 +136,8 @@ class Task(object):
     状态：running（在干）→ need_human（卡在等人）→ running → done / error
     """
 
-    def __init__(self, tid, job, profile, url, headless=True, refill=False):
+    def __init__(self, tid, job, profile, url, headless=True, refill=False,
+                 tailored_path=None, tailored_name=None):
         self.id = tid
         self.job = job or {}
         self.profile = profile or {}
@@ -145,6 +146,10 @@ class Task(object):
         # 重填覆盖：段里已经有内容也照样打开「编辑」重填一遍再保存。
         # 默认关——正常投递时已填好的段跳过就好，没必要把站点上的内容重写一遍。
         self.refill = bool(refill)
+        # 按岗位定制的专版简历（用户开了「按岗位定制简历」且通过事实门生成）。
+        # 投递时优先用它当附件，原件 / 自动生成的 txt 作为兜底（见 _resume_file_for_upload）。
+        self.tailored_path = tailored_path
+        self.tailored_name = tailored_name
         self.status = 'running'
         self.steps = []
         self.shots = []
@@ -464,12 +469,18 @@ def _make_resume_file(t):
 
 
 def _resume_file_for_upload(t):
-    """挑一份简历文件去上传：能拿到用户原件就用原件。
+    """挑一份简历文件去上传：定制专版 > 用户原件 > 自动生成的 txt 兜底。
 
-    原件是他自己做（或找人做）的那份 Word/PDF，照片、排版、证书扫描件都在里面——
-    招聘方看到的就是他真正的简历。以前无脑生成 txt，等于把人家的简历换成了
-    一页纯文字，照片全丢，这一步是很多人不愿意用自动投的原因。
+    优先级说明：
+    1) 用户开了「按岗位定制简历」且事实门放行 → 用那份专版 docx 当附件。
+       它比原件更贴合岗位（摘要/亮点/技能排序都按 JD 改写过），也比 txt 完整。
+    2) 否则能拿到用户原件就用原件（照片、排版、证书扫描件都在里面）。
+    3) 都拿不到才退到自动生成的 txt 兜底，保证「附件能传」这条链路不断。
     """
+    # 1) 定制专版（路径来自后端 tailor 生成的、落在该岗位 tailored_map 里的 docx）
+    tp = getattr(t, 'tailored_path', None)
+    if tp and os.path.isfile(tp):
+        return tp, os.path.basename(tp)
     raw = (t.profile.get('resume_path') or '').strip()
     if raw:
         # 只认落在我们自己 resumes 目录里的文件，避免路径被写成别的什么东西
@@ -4052,13 +4063,15 @@ def _pick_radio(page, meta, value):
 
 
 # --------------------------------------------------------------- 入口
-def start(job, profile, url, headless=True, refill=False):
+def start(job, profile, url, headless=True, refill=False,
+          tailored_path=None, tailored_name=None):
     cancel_all()                 # 新单开跑，旧单请下场（详见 cancel_all 注释）
     for old in (k for k, v in list(TASKS.items())[:-MAX_TASKS + 1]
                 if v.status in ('done', 'error')):
         TASKS.pop(old, None)
     tid = uuid.uuid4().hex[:12]
-    t = Task(tid, job, profile, url, headless, refill=refill)
+    t = Task(tid, job, profile, url, headless, refill=refill,
+             tailored_path=tailored_path, tailored_name=tailored_name)
     TASKS[tid] = t
     threading.Thread(target=_run, args=(t,), daemon=True).start()
     return tid, t

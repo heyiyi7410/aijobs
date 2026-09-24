@@ -4,3 +4,7 @@ Flask-Cors==4.0.1
 # 读用户传上来的 PDF 简历用（纯 Python，不需要编译；没装只是 PDF 简历读不了，
 # 界面会提示用户改用 Word，其他功能不受影响）
 pypdf>=4.0
+# 按岗位定制简历时，把 LLM 改写后的结果渲染成一份能直接发给 HR 的 docx 附件。
+# 缺它会导致「定制简历」整功能不可用（render_docx 直接 ImportError）。
+# 注意：本机/线上此前是手工 pip install 装上的，没进依赖清单，重装即挂——已补回。
+python-docx>=1.0

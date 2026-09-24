@@ -1153,11 +1153,16 @@ def api_autofill_start():
     profile = _profile_for_autofill(data)
     if not (profile.get('name') or '').strip():
         return jsonify(ok=False, msg='请先回到第 1 步把简历信息填上'), 400
+    # 用户开了「按岗位定制简历」时，前端把该岗位的定制 docx 路径随同投递请求带过来。
+    # 有就优先当附件上传（详见 autofill._resume_file_for_upload）。
+    tailored = data.get('tailored') or {}
     tid, _t = autofill.start(
         job=job, profile=profile, url=url,
         headless=not bool(data.get('show_browser')),
         # 重填覆盖：段里已有内容也打开重填一遍再保存（默认关）
         refill=bool(data.get('refill')),
+        tailored_path=tailored.get('path'),
+        tailored_name=tailored.get('name'),
     )
     return jsonify(ok=True, task_id=tid)
 

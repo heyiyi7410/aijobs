@@ -278,7 +278,8 @@
     </div>
 
     <!-- ============ 自动填表（测试版）：只管「要自己去官网投」那组 ============ -->
-    <AutoFillPanel v-if="mode === 'running' && runMode === 'link'" :job="cur" @done="onAutoDone" />
+    <AutoFillPanel v-if="mode === 'running' && runMode === 'link'" :job="cur"
+                   :tailored="tailoredMap[cur.key]" @done="onAutoDone" />
 
     <!-- ============ 邮件代发进度 ============ -->
     <div v-if="task" class="card">

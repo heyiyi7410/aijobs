@@ -229,7 +229,11 @@ import { computed, onUnmounted, ref } from 'vue'
 import { store, profilePayload } from '../store'
 import { api } from '../api'
 
-const props = defineProps({ job: { type: Object, default: () => ({}) } })
+const props = defineProps({
+  job: { type: Object, default: () => ({}) },
+  // 该岗位「按岗位定制简历」生成的专版 docx（含 path/name）。有就优先当附件投出去。
+  tailored: { type: Object, default: null },
+})
 const emit = defineEmits(['done'])
 
 const showBrowser = ref(false)
@@ -374,7 +378,8 @@ async function doStart() {
       job: props.job,
       url: targetUrl.value,
       show_browser: showBrowser.value,
-      refill: refill.value
+      refill: refill.value,
+      tailored: props.tailored,
     })
   } catch (e) {
     starting.value = false
