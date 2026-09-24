@@ -1492,3 +1492,27 @@ textarea.input {
     padding-inline: .8rem;
   }
 }
+
+/* 第 4 步存在固定底栏时，多留出一档底部滚动空间，避免最后一张卡被遮住 */
+.shell:has(.step4-footer) {
+  padding-bottom: calc(8.8rem + env(safe-area-inset-bottom));
+}
+
+/* Step1 大字号版首屏更接近效果图：上传区突出，说明文字收紧 */
+.up-box {
+  margin-top: .7rem;
+}
+.up-hint {
+  line-height: 1.55;
+}
+@media (max-width: 430px) {
+  .up-btn {
+    min-height: 5.2rem;
+  }
+  .up-btn-t b {
+    font-size: 1.05rem;
+  }
+  .up-btn-t small {
+    font-size: .84rem;
+  }
+}
