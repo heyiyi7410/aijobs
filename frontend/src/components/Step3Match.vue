@@ -28,7 +28,7 @@
             placeholder="按单位名搜索，例如：武钢、中建三局"
           />
           <button class="btn btn-primary" :disabled="store.companySearching" @click="doSearch">
-            {{ store.companySearching ? '正在搜…' : '搜这家单位' }}
+            {{ store.companySearching ? '正在搜…' : '搜索' }}
           </button>
         </div>
         <div class="csearch-row" v-if="store.companyFilter" style="margin-top:.6rem;">
@@ -45,24 +45,24 @@
       <div class="chips" style="margin-bottom:1rem;">
         <button v-if="outCount" class="chip" :class="{ on: store.scope === 'local' }"
           @click="setScope('local')">
-          只要{{ cityName }}（{{ localCount }}）
+          本市（{{ localCount }}）
         </button>
         <button v-if="outCount" class="chip" :class="{ on: store.scope === 'all' }"
           @click="setScope('all')">
-          连外地一起看（{{ store.jobs.length }}）
+          外地（{{ outCount }}）
         </button>
         <button class="chip" :class="{ on: store.filter === 'all' }" @click="store.filter = 'all'">
-          全部（{{ base.length }}）
+          全部
         </button>
         <button class="chip" :class="{ on: store.filter === 'good' }" @click="store.filter = 'good'">
-          只看很适合（{{ base.filter(j => j.score >= 70).length }}）
+          很适合
         </button>
         <button class="chip" :class="{ on: store.filter === 'mail' }"
           @click="store.filter = 'mail'">
-          只看能代投（{{ base.filter(j => (j.hr_email || '').trim()).length }}）
+          能代投
         </button>
         <button v-if="shown.length" class="chip" :class="{ on: allPicked }" @click="togglePickAll">
-          {{ allPicked ? '取消全选' : '全部选择' }}（{{ shown.length }}）
+          {{ allPicked ? '取消全选' : '全选' }}
         </button>
       </div>
 
