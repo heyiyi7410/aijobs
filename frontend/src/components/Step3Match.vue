@@ -28,7 +28,7 @@
             placeholder="按单位名搜索，例如：武钢、中建三局"
           />
           <button class="btn btn-primary" :disabled="store.companySearching" @click="doSearch">
-            {{ store.companySearching ? '正在搜…' : '搜这家单位' }}
+            {{ store.companySearching ? '正在搜…' : '搜索' }}
           </button>
         </div>
         <div class="csearch-row" v-if="store.companyFilter" style="margin-top:.6rem;">
@@ -45,24 +45,24 @@
       <div class="chips" style="margin-bottom:1rem;">
         <button v-if="outCount" class="chip" :class="{ on: store.scope === 'local' }"
           @click="setScope('local')">
-          只要{{ cityName }}（{{ localCount }}）
+          本市（{{ localCount }}）
         </button>
         <button v-if="outCount" class="chip" :class="{ on: store.scope === 'all' }"
           @click="setScope('all')">
-          连外地一起看（{{ store.jobs.length }}）
+          外地（{{ outCount }}）
         </button>
         <button class="chip" :class="{ on: store.filter === 'all' }" @click="store.filter = 'all'">
-          全部（{{ base.length }}）
+          全部
         </button>
         <button class="chip" :class="{ on: store.filter === 'good' }" @click="store.filter = 'good'">
-          只看很适合（{{ base.filter(j => j.score >= 70).length }}）
+          很适合
         </button>
         <button class="chip" :class="{ on: store.filter === 'mail' }"
           @click="store.filter = 'mail'">
-          只看能代投（{{ base.filter(j => (j.hr_email || '').trim()).length }}）
+          能代投
         </button>
         <button v-if="shown.length" class="chip" :class="{ on: allPicked }" @click="togglePickAll">
-          {{ allPicked ? '取消全选' : '全部选择' }}（{{ shown.length }}）
+          {{ allPicked ? '取消全选' : '全选' }}
         </button>
       </div>
 
@@ -70,28 +70,25 @@
         <span class="src-dot"></span>{{ sourceLine }}
       </div>
 
-      <p v-if="relaxed && outCount" class="relax-tip">
+      <p v-if="relaxed && outCount" class="relax-tip info-blue">
         {{ cityName }}的岗位只找到 <b>{{ localCount }}</b> 个，所以另外给你带了
         <b>{{ outCount }}</b> 个其他城市的（都标着「外地」）。
         不想跑外地就点上面「只要{{ cityName }}」，这里会只留本市的。
       </p>
-      <p v-if="wideCount" class="relax-tip">
+      <p v-if="wideCount" class="relax-tip info-blue">
         里面有 <b>{{ wideCount }}</b> 个公告只写了「全国」或只写了省名
         （标着「全国招聘」「本省」）—— 里面可能有{{ cityName }}的岗位，也可能在别处，
         点开看详情里的地点再决定。只想要明确写着{{ cityName }}的，
         回第 2 步把「连全国招聘和本省其他城市一起找」取消勾选。
       </p>
-      <p v-if="droppedClosed" class="relax-tip">
+      <p v-if="droppedClosed" class="relax-tip info-green">
         已经替你剔掉 <b>{{ droppedClosed }}</b> 个投不了的岗位
         （报名还没开始或已截止）——下面这些都是现在能报的。
       </p>
-      <p v-if="usedFallback" class="relax-tip">
+      <p v-if="usedFallback" class="relax-tip info-warn">
         暂时连不上招聘网站，下面先显示的是内置示例岗位，投递前请再确认一下。
       </p>
 
-      <p class="muted" style="margin:-.4rem 0 .8rem;">
-        已选中 <b style="color:var(--primary); font-size:1.15rem;">{{ store.picked.length }}</b> 个
-      </p>
     </div>
 
     <div v-if="!shown.length" class="card center">
@@ -222,7 +219,7 @@
          主动实时抓一次，抓回来立即合并进列表。 -->
     <div v-if="shown.length && !store.companyFilter">
       <div v-if="pulling" class="pull-more loading">
-        <span class="pull-spin">⟳</span> 正在手动抓取最新职位…（要跑好几家网站，约 10~30 秒，请稍等）
+        <span class="pull-spin" aria-hidden="true"></span> 正在手动抓取最新职位…（要跑好几家网站，约 10~30 秒，请稍等）
       </div>
       <div v-else-if="showHint" class="pull-more" @click="loadMore"
         role="button" tabindex="0"
@@ -649,6 +646,9 @@ onUnmounted(() => {
 
 /* 手机屏放不下「内容 + 右侧链接」，让链接整行落到卡片底部（更好点按） */
 @media (max-width: 480px) {
+  .csearch-row .btn {
+    width: 100%;
+  }
   .job { flex-wrap: wrap; }
   .job-go {
     flex: 1 1 100%;

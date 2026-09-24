@@ -20,7 +20,7 @@
             <path d="M21 3 14 21l-3.5-7.5L3 10z" />
           </svg>
         </span>
-        <h2 class="card-title">第 4 步 · 去投递</h2>
+        <h2 class="card-title">去投递</h2>
         <span class="head-btns">
           <button class="btn btn-mini setup-btn" :class="{ on: mailReady }" @click="openSetup">
             {{ setupBtnText }}
@@ -36,7 +36,7 @@
       </p>
 
       <!-- ---- 组 1：公告里留了报名邮箱 → 能替你代投 ---- -->
-      <div v-if="mailJobs.length" class="group">
+      <div v-if="mailJobs.length" class="group group-mail">
         <div class="group-head">
           <span class="tile tile-green tile-sm" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -45,7 +45,8 @@
               <path d="M21 3 14 21l-3.5-7.5L3 10z" />
             </svg>
           </span>
-          <span class="tag tag-ok">能代投</span>
+          <span class="group-title">能代投（有邮箱）</span>
+          <span class="tag tag-ok">推荐</span>
           <b class="group-count">{{ mailJobs.length }} 个</b>
         </div>
         <p class="group-note">
@@ -157,7 +158,7 @@
       </p>
 
       <!-- ---- 组 2：没留邮箱 → 只能自己去官网投（自动填表帮忙） ---- -->
-      <div v-if="linkJobs.length" class="group">
+      <div v-if="linkJobs.length" class="group group-link">
         <div class="group-head">
           <span class="tile tile-sm" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -166,7 +167,7 @@
               <path d="M14 10a5 5 0 0 0-7.1 0l-2.4 2.4a5 5 0 0 0 7.1 7.1L13 18.1" />
             </svg>
           </span>
-          <span class="tag tag-link">要自己去官网投</span>
+          <span class="group-title">去官网投（无邮箱）</span>
           <b class="group-count">{{ linkJobs.length }} 个</b>
         </div>
         <p class="group-note">
@@ -374,6 +375,18 @@
           <span :class="r.ok ? 'ok' : 'muted'">{{ r.status }}</span>
         </div>
       </div>
+    </div>
+
+    <div v-if="mode === 'idle'" class="step4-footer" aria-label="投递操作">
+      <button class="btn" @click="go(3)">上一步</button>
+      <button v-if="mailJobs.length" class="btn btn-primary"
+        :disabled="busy" @click="mailReady ? sendAll() : openSetup()">
+        {{ mailReady ? ('一键代投这 ' + mailJobs.length + ' 个') : '设置发件邮箱' }}
+      </button>
+      <button v-else-if="linkJobs.length" class="btn btn-primary" @click="startLink">
+        开始逐个投递
+      </button>
+      <button v-else class="btn btn-primary" disabled>完成</button>
     </div>
 
     <!-- ============ 弹窗 1：设置发件邮箱 ============
@@ -1355,6 +1368,34 @@ function badgeClass(n) {
 .setup-btn { flex: none; }
 .setup-btn.on { background: var(--accent-1); border-color: var(--accent-7); color: var(--accent-7); }
 
+@media (max-width: 430px) {
+  .head-btns {
+    width: 100%;
+    margin-left: 0;
+  }
+  .head-btns .setup-btn {
+    flex: 1;
+  }
+  .group-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .group-title {
+    flex: 1 1 9rem;
+  }
+  .group-count {
+    margin-left: auto;
+  }
+  .result-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .2rem;
+  }
+  .ri-extra {
+    text-align: left;
+  }
+}
+
 /* 分组标题里的小号图标块（tile-sm：比卡片头的 2.3rem 小一号） */
 .tile-sm {
   width: 1.9rem;
@@ -1364,6 +1405,37 @@ function badgeClass(n) {
 .tile-sm svg {
   width: 1.05rem;
   height: 1.05rem;
+}
+
+/* 第 4 步底部固定操作栏：视觉与最终效果图一致，同时保持真实业务动作 */
+.step4-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  display: flex;
+  gap: .8rem;
+  padding: .7rem 1rem calc(.7rem + env(safe-area-inset-bottom));
+  background: rgba(255,255,255,.97);
+  box-shadow: 0 -6px 18px rgba(23, 78, 148, .08);
+  backdrop-filter: blur(10px);
+}
+.step4-footer .btn {
+  flex: 1;
+}
+.step4-footer .btn:not(.btn-primary) {
+  color: var(--primary-7);
+  border-color: var(--primary);
+}
+@media (min-width: 48rem) {
+  .step4-footer {
+    left: 50%;
+    right: auto;
+    width: min(46rem, 100%);
+    transform: translateX(-50%);
+    border-radius: 1rem 1rem 0 0;
+  }
 }
 
 /* —— 弹窗 ——

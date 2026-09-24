@@ -9,8 +9,9 @@
         <p class="sub">帮您准备简历、筛选合适的单位和岗位<br />一步一步完成投递，找工作更轻松</p>
       </div>
       <div class="topbar-actions">
-        <button class="btn-hero" @click="toggleFont" :aria-pressed="store.bigFont">
-          {{ store.bigFont ? 'A-' : 'A+' }}
+        <button class="btn-hero font-switch" @click="toggleFont" :aria-pressed="store.bigFont"
+          :aria-label="store.bigFont ? '切换为标准字号' : '切换为大字号'">
+          <span>A-</span><i aria-hidden="true"></i><span>A+</span>
         </button>
         <button class="btn-hero" @click="readAloud" v-if="canSpeak" aria-label="朗读这一步的说明">
           <!-- 禁 emoji 当图标：用 SVG 喇叭 -->
@@ -50,6 +51,10 @@
         <span class="pref-t">当前选择偏好</span>
         <span>已选 <b>{{ p.nature.length }}</b> 类单位性质<template v-if="p.hireType">、<b>1</b> 种用工方式</template><template v-if="p.jobTypes.length">、<b>{{ p.jobTypes.length }}</b> 类工作</template><template v-if="cityNow">、城市 <b>{{ cityNow }}</b></template></span>
       </div>
+      <div v-if="store.step === 3" class="selected-strip">
+        <span class="selected-dot" aria-hidden="true"></span>
+        <span>已选中 <b>{{ store.picked.length }}</b> 个岗位</span>
+      </div>
       <div class="navbar-btns">
         <button class="btn" v-if="store.step > 1" @click="go(store.step - 1)">上一步</button>
         <button class="btn btn-primary" :disabled="store.loading" @click="next">
@@ -82,11 +87,7 @@ const HINTS = {
 const p = store.profile
 const cityNow = computed(() => effectiveCity() || '不限城市')
 
-const nextText = computed(() => {
-  if (store.step === 1) return '下一步：选单位'
-  if (store.step === 2) return '开始帮我找工作'
-  return '去投递（已选 ' + store.picked.length + ' 个）'
-})
+const nextText = computed(() => '下一步')
 
 function toggleFont() {
   store.bigFont = !store.bigFont
@@ -113,7 +114,8 @@ watch(
   () => store.bigFont,
   v => {
     document.documentElement.style.fontSize = v ? '23px' : '18px'
-  }
+  },
+  { immediate: true }
 )
 
 function readAloud() {

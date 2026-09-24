@@ -210,6 +210,20 @@ button,
   height: 1.1rem;
   flex: none;
 }
+.font-switch {
+  gap: 0.55rem;
+  min-width: 5.6rem;
+  justify-content: center;
+}
+.font-switch i {
+  width: 1px;
+  height: 1.25rem;
+  background: #cbd8e8;
+  display: block;
+}
+.font-switch span {
+  line-height: 1;
+}
 /* hero 右下角的装饰：一张纸 + 放大镜（纯 CSS 画，纯装饰） */
 .hero-doc {
   position: absolute;
@@ -1014,18 +1028,24 @@ textarea.input {
    单列、贴边、触控目标不缩水 */
 @media (max-width: 480px) {
   .topbar-in {
-    padding: 1.15rem 0.85rem 1.3rem;
+    padding: 1.2rem 0.85rem 1.35rem;
   }
   .topbar h1 {
-    font-size: 1.38rem;
+    font-size: 1.62rem;
+    line-height: 1.15;
   }
   .topbar .sub {
-    font-size: 0.82rem;
+    font-size: 0.92rem;
+    line-height: 1.55;
   }
   .btn-hero {
-    min-height: 2.45rem;
+    min-height: 2.6rem;
     padding: 0 0.8rem;
-    font-size: 0.9rem;
+    font-size: 0.96rem;
+  }
+  .font-switch {
+    min-width: 5.25rem;
+    padding-inline: 0.7rem;
   }
   .hero-doc {
     width: 3.6rem;
@@ -1048,13 +1068,14 @@ textarea.input {
     margin-top: 0.9rem;
   }
   .stepbar .s {
-    font-size: 0.75rem;
-    gap: 0.3rem;
+    font-size: 0.86rem;
+    gap: 0.38rem;
+    font-weight: 650;
   }
   .stepbar .s .n {
-    width: 1.85rem;
-    height: 1.85rem;
-    font-size: 0.85rem;
+    width: 2.1rem;
+    height: 2.1rem;
+    font-size: 0.98rem;
   }
   .stepbar .s:not(:last-child)::after {
     top: 0.95rem;
@@ -1062,30 +1083,39 @@ textarea.input {
     right: calc(-50% + 1.25rem);
   }
   .card {
-    padding: 1.05rem 0.9rem;
+    padding: 1.2rem 1rem;
   }
   .card-title {
-    font-size: 1.12rem;
+    font-size: 1.22rem;
+    line-height: 1.35;
+  }
+  .card-title .soft {
+    font-size: 0.9rem;
+  }
+  .card-hint,
+  .muted {
+    font-size: 0.92rem;
   }
   .tile {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.6rem;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 0.65rem;
   }
   .tile svg {
-    width: 1.1rem;
-    height: 1.1rem;
+    width: 1.2rem;
+    height: 1.2rem;
   }
   .btn-big {
     min-height: 4rem;
     font-size: 1.2rem;
   }
   .job {
-    padding: 0.9rem 0.75rem;
-    gap: 0.7rem;
+    padding: 1rem 0.85rem;
+    gap: 0.75rem;
   }
   .job-title {
-    font-size: 1.05rem;
+    font-size: 1.15rem;
+    line-height: 1.35;
   }
   .job-score {
     min-width: 4.2rem;
@@ -1271,4 +1301,218 @@ textarea.input {
   color: var(--accent);
   margin: 0.3rem 0;
   letter-spacing: -0.02em;
+}
+
+/* 大字号版：语音按钮使用内联 SVG，不用 emoji */
+.mic-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+.mic-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+}
+/* 岗位实时抓取加载图标：CSS 圆环，避免字符图标 */
+.pull-spin {
+  width: 1rem;
+  height: 1rem;
+  display: inline-block;
+  vertical-align: -0.15rem;
+  border: .14rem solid var(--line-2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1.1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .pull-spin { animation-duration: 2.4s; }
+}
+
+/* Step2 最终效果图：独立区块、右侧帮助链接、紧凑输入区 */
+.text-link {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--primary-7);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+  padding: .45rem .25rem;
+  min-height: 2.4rem;
+}
+.compact-field {
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+.switch-card {
+  padding-block: .9rem;
+}
+.wish-switch {
+  margin: 0;
+  align-items: center;
+}
+.wish-switch > span {
+  display: flex;
+  flex-direction: column;
+  gap: .08rem;
+  min-width: 0;
+}
+.wish-switch b {
+  font-size: 1.05rem;
+}
+.wish-switch small {
+  color: var(--ink-2);
+  font-size: .86rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+@media (max-width: 480px) {
+  .card-head {
+    align-items: flex-start;
+  }
+  .text-link {
+    font-size: .82rem;
+    max-width: 8.5rem;
+    text-align: right;
+  }
+  .wish-switch b {
+    font-size: 1rem;
+  }
+  .wish-switch small {
+    font-size: .82rem;
+  }
+}
+
+/* Step4 最终效果图：两组投递方式的标题比状态徽章更醒目 */
+.group-title {
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.group-head .group-count {
+  margin-left: auto;
+}
+@media (max-width: 480px) {
+  .group-title {
+    font-size: 1.08rem;
+  }
+}
+
+/* Step3 底部选中状态条：与最终效果图一致，固定在导航按钮上方 */
+.selected-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 2.3rem;
+  padding: .35rem .7rem;
+  border-radius: .65rem;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: .92rem;
+  font-weight: 600;
+}
+.selected-strip b {
+  color: var(--primary-7);
+  font-size: 1.08rem;
+}
+.selected-dot {
+  width: .95rem;
+  height: .95rem;
+  flex: none;
+  background: var(--check-badge) center / contain no-repeat;
+}
+
+/* Step3 说明状态分层 */
+.relax-tip.info-blue {
+  color: var(--primary-7);
+  background: var(--primary-1);
+}
+.relax-tip.info-green {
+  color: var(--accent-7);
+  background: var(--accent-1);
+}
+.relax-tip.info-warn {
+  color: var(--warn);
+  background: var(--warn-1);
+}
+
+/* Step4 两组投递方式更像独立主卡片 */
+.group-mail {
+  border-color: #cfe9dd;
+  background: linear-gradient(180deg, #fbfffd 0%, var(--surface) 100%);
+  box-shadow: 0 3px 12px rgba(34, 176, 113, .06);
+}
+.group-link {
+  border-color: #d9e6f7;
+  background: linear-gradient(180deg, #fcfdff 0%, var(--surface) 100%);
+  box-shadow: 0 3px 12px rgba(31, 122, 242, .05);
+}
+.group-mail .group-head {
+  padding-bottom: .55rem;
+  border-bottom: 1px solid #e3f1ea;
+}
+.group-link .group-head {
+  padding-bottom: .55rem;
+  border-bottom: 1px solid #e7eef8;
+}
+
+/* 手机进一步收紧顶部与岗位卡，避免 390px 宽时评分块挤标题 */
+@media (max-width: 430px) {
+  .topbar-in {
+    flex-direction: column;
+    align-items: stretch;
+    gap: .7rem;
+  }
+  .topbar-actions {
+    justify-content: flex-end;
+    padding-top: 0;
+  }
+  .job-top {
+    gap: .5rem;
+  }
+  .job-score {
+    min-width: 4.4rem;
+    padding-inline: .4rem;
+  }
+  .job-score b {
+    font-size: 1.42rem;
+  }
+  .job-title {
+    font-size: 1.12rem;
+  }
+  .badge {
+    font-size: .76rem;
+    padding-inline: .5rem;
+  }
+  .navbar {
+    padding-inline: .8rem;
+  }
+}
+
+/* 第 4 步存在固定底栏时，多留出一档底部滚动空间，避免最后一张卡被遮住 */
+.shell:has(.step4-footer) {
+  padding-bottom: calc(8.8rem + env(safe-area-inset-bottom));
+}
+
+/* Step1 大字号版首屏更接近效果图：上传区突出，说明文字收紧 */
+.up-box {
+  margin-top: .7rem;
+}
+.up-hint {
+  line-height: 1.55;
+}
+@media (max-width: 430px) {
+  .up-btn {
+    min-height: 5.2rem;
+  }
+  .up-btn-t b {
+    font-size: 1.05rem;
+  }
+  .up-btn-t small {
+    font-size: .84rem;
+  }
 }
