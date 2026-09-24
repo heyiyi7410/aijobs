@@ -1,0 +1,6 @@
+Flask==3.0.3
+Flask-SocketIO==5.3.6
+Flask-Cors==4.0.1
+# 读用户传上来的 PDF 简历用（纯 Python，不需要编译；没装只是 PDF 简历读不了，
+# 界面会提示用户改用 Word，其他功能不受影响）
+pypdf>=4.0

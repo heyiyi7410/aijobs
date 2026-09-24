@@ -1,0 +1,5 @@
+# 部署到服务器时才需要装（本地一键启动用不到这些）
+# 用 eventlet 是因为投递进度走 WebSocket，普通 WSGI worker 不支持
+gunicorn==22.0.0
+eventlet==0.36.1
+dnspython==2.6.1

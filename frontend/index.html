@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover 让页面铺到刘海下面，再用 env(safe-area-inset-*) 垫回来。
+         interactive-widget=resizes-content 让安卓软键盘压缩布局视口，底部的
+         输入框/按钮才会像 iOS 那样跟着键盘走，而不是被盖住。
+         不写 maximum-scale / user-scalable=no：那会禁掉双指缩放（无障碍硬伤），
+         真正要修的是「输入框字号 < 16px 导致 iOS 聚焦就放大」，见 style.css 的
+         .input（1.1rem @18px = 19.8px）。 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- 状态栏取「页面顶部那一块的颜色」，不是品牌色：本产品顶部是页面底色
+         --bg(#f5f8fb)，用品牌蓝会在状态栏和内容之间切出一条硬边。
+         只有亮色一套——全站没有暗色主题，硬给暗色会让状态栏和页面打架。 -->
+    <meta name="theme-color" content="#f5f8fb" />
+    <meta name="color-scheme" content="light" />
+    <!-- 加到手机桌面后全屏打开，像个 App -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="找工作" />
+    <!-- 禁止 iOS 把数字自动识别成电话号码（页面里全是薪资数字，会误触） -->
+    <meta name="format-detection" content="telephone=no" />
+    <title>找工作助手 · 一键投简历</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+[
+  {
+    "title": "整车装配操作工",
+    "company": "特斯拉（上海超级工厂）",
+    "nature": "外企",
+    "city": "上海",
+    "apply_url": "https://www.tesla.cn/careers/job/123456",
+    "tags": ["操作工", "流水线", "汽车"]
+  },
+  {
+    "title": "电气装配技术员",
+    "company": "西门子",
+    "nature": "外企",
+    "city": "上海",
+    "apply_url": "https://jobs.siemens.com/jobs/98765",
+    "tags": ["电工", "装配", "电气"]
+  },
+  {
+    "title": "机车电气装配工",
+    "company": "中国中车株洲电力机车有限公司",
+    "nature": "央企",
+    "city": "株洲",
+    "apply_url": "https://www.iguopin.com/company/xxxx/job/yyyy",
+    "tags": ["装配", "电气", "国企"]
+  }
+]

@@ -1,0 +1,9 @@
+# 「帮我自动填」这个功能的额外依赖（可选，不装不影响其他功能）
+#
+# 安装：
+#   pip install -r backend/requirements-autofill.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+#   python -m playwright install chromium
+#
+# 注意 chromium 是单独下载的浏览器（约 150MB），国内建议先设镜像：
+#   set PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
+playwright>=1.40

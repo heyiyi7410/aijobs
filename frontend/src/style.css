@@ -1,0 +1,894 @@
+/* 找工作助手 · 样式
+   方向：克制专业 + 可信赖（完整说明见 ../../.impeccable.md）
+   面向不常使用电脑的人：大字号、大按钮、高对比、一步只做一件事。
+
+   三条不能碰的规矩：
+   1. 尺寸一律 rem —— 顶上的 A+/A- 会改 html 的 font-size（18px ↔ 23px）
+   2. 触控目标 ≥ 44px —— 这个产品用户手不稳
+   3. 焦点环必须看得见 —— 不能 outline:none 就完事 */
+
+:root {
+  /* ---- 色：冷调中性 + 单一强调色 ---- */
+  --ink: #12263a;          /* 正文。off-black，不用 #000 */
+  --ink-2: #56687d;        /* 次要文字，白底对比 4.6:1 */
+  --ink-3: #8798a8;        /* 占位 / 弱化 */
+  --bg: #f5f8fb;
+  --surface: #ffffff;
+  --surface-2: #eef4fa;
+  --line: #dde6ef;
+  --line-2: #c4d3e0;
+  --primary: #0369a1;      /* 专业蓝，白底 5.4:1 */
+  --primary-7: #02598a;
+  --primary-1: #e8f4fc;
+  --accent: #16a34a;       /* 成功 / 通过 */
+  --accent-7: #0f7a41;     /* 压在 --accent-1 上的深绿字，对比 4.9:1 */
+  --accent-1: #e7f6ec;
+  --warn: #8a5200;
+  --warn-1: #fdf1de;
+  --danger: #c4291c;
+  --danger-1: #fdeceb;
+
+  /* ---- 圆角 ---- */
+  --radius: 0.85rem;
+  --radius-sm: 0.5rem;
+  --radius-pill: 99rem;
+
+  /* ---- 动效 token（完整依据见 webapp/DESIGN.md 第一节第 5 问）
+     曲线和时长只能从这里取，不许在组件里另起一套数值 ---- */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);      /* 入场 / 退场 / UI 默认 */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);  /* 屏幕内移动、形变 */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);   /* 抽屉 / 底部弹层（iOS 手感） */
+  --t-press: 120ms;   /* 按压缩放 */
+  --t-pop: 180ms;     /* 状态切换：卡片选中、勾选、徽标 */
+  --t-menu: 200ms;    /* 下拉、浮层、提示条 */
+  --t-sheet: 280ms;   /* 弹窗、抽屉 */
+  /* 旧名保留为别名：全站几十处仍在用 --ease / --t，改名会漏改 */
+  --ease: var(--ease-out);
+  --t: var(--t-pop);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 18px; /* 特大字模式会改成 23px */
+  /* finesse mobile-floor M1：用 clip 不用 hidden —— hidden 会造出滚动容器，
+     把里面所有 sticky 后代悄悄废掉 */
+  overflow-x: clip;
+  /* 分步向导：Android 的下拉刷新会把页面整个重载，用户的档案、已选岗位、
+     投递进度全部丢掉 —— 这是"手滑一下就白干"级别的破坏，必须禁掉。
+     根上用 none，内部滚动容器（弹窗正文）用 contain，见 .modal-body。 */
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  overflow-x: clip;
+  overscroll-behavior: none;
+  /* 手机上点按钮不要那层灰色闪块，:active 的位移就是反馈 */
+  -webkit-tap-highlight-color: transparent;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei',
+    'Hiragino Sans GB', 'Source Han Sans SC', sans-serif;
+  font-size: 1rem;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 去掉移动端 300ms 点击延迟：告诉浏览器「这个元素不做双击缩放」，
+   click 就能立刻触发，不用等它判断是不是双击 */
+button,
+a,
+[role='button'],
+.chip,
+.stepbar .s,
+.job-pick,
+.navbar .btn {
+  touch-action: manipulation;
+}
+
+/* 长按不选中控件文字、不弹复制/分享菜单 —— 原生控件从不这样。
+   注意：只加在「控件」上。岗位卡 .job 里是价格、公司名、电话这些**内容**，
+   用户要能长按复制，所以不加（DESIGN.md 第三节：正文不许 user-select:none）。 */
+button,
+[role='button'],
+.chip,
+.stepbar .s,
+.job-pick,
+.modal-x,
+.pbtn {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* finesse mobile-floor M4：标题要在任何宽度都能断行，不能把布局撑破 */
+.topbar h1,
+.card-title,
+.job-title {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* 数字（分数、条数、秒数）用等宽字形，跳动时不会左右晃 */
+.score,
+.stepbar .n,
+.result-item b,
+.finding-t b {
+  font-variant-numeric: tabular-nums;
+}
+
+.shell {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 0 1rem calc(7.5rem + env(safe-area-inset-bottom));
+}
+/* 第 3 步是岗位列表，宽一点看得清一行信息 */
+#app.wide {
+  max-width: 58rem;
+}
+
+/* ================= 顶部 ================= */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 1.4rem 0 0.9rem;
+}
+.topbar h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.topbar .sub {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  margin: 0.15rem 0 0;
+}
+.topbar-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* ================= 通用控件 ================= */
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* 全站统一的键盘焦点环。之前 .input 里写 outline:none 把焦点抹掉了，
+   键盘用户根本不知道光标在哪 —— 这里统一补回来。 */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.btn {
+  min-height: 3.3rem;                 /* 59px @18px，远超 44px */
+  padding: 0 1.4rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  /* 颜色类走 --t-pop，缩放单独走 --t-press：按下必须在 120ms 内到位，
+     跟颜色一起拖到 180ms 会显得迟钝 */
+  transition: background var(--t-pop) var(--ease-out),
+    border-color var(--t-pop) var(--ease-out), color var(--t-pop) var(--ease-out),
+    transform var(--t-press) var(--ease-out);
+}
+.btn:active {
+  /* 按下缩放，不是位移 1px —— 位移在手机上几乎看不见，
+     scale(0.97) 是「按下去有回应」最直接的信号 */
+  transform: scale(0.97);
+}
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.btn-primary:disabled {
+  background: var(--ink-3);
+  border-color: var(--ink-3);
+  color: #fff;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn-big {
+  width: 100%;
+  min-height: 4.2rem;
+  font-size: 1.3rem;
+  border-radius: var(--radius);
+}
+.btn-mini {
+  min-height: 2.75rem;
+  padding: 0 0.85rem;
+  font-size: 0.9rem;
+  border-radius: var(--radius-sm);
+}
+.btn-mini svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
+}
+
+/* ================= 步骤条 ================= */
+.stepbar {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 0 1.4rem;
+}
+.stepbar .s {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
+    color var(--t) var(--ease);
+}
+.stepbar .s .n {
+  flex: none;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.stepbar .s.on {
+  border-color: var(--primary);
+  background: var(--primary-1);
+  color: var(--primary-7);
+}
+.stepbar .s.on .n {
+  background: var(--primary);
+  color: #fff;
+}
+.stepbar .s.done {
+  background: var(--surface-2);
+  color: var(--primary-7);
+}
+.stepbar .s.done .n {
+  background: var(--primary);
+  color: #fff;
+}
+/* 走过的步骤可以点回去改 —— 给个手型，让人知道它是能点的 */
+.stepbar .s.back {
+  cursor: pointer;
+}
+
+/* ================= 卡片 / 区块 ================= */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.3rem 1.2rem;
+  margin-bottom: 1rem;
+}
+.card-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 0.2rem;
+  letter-spacing: -0.01em;
+}
+.card-hint {
+  font-size: 0.92rem;
+  color: var(--ink-2);
+  margin: 0 0 1rem;
+  max-width: 42rem;
+}
+
+/* ================= 表单 ================= */
+.field {
+  margin-bottom: 1.4rem;
+}
+.field > label {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.45rem;
+}
+.field .tip {
+  font-size: 0.88rem;
+  color: var(--ink-2);
+  margin: -0.2rem 0 0.6rem;
+  max-width: 42rem;
+}
+/* 勾选行（如「连全国招聘和本省一起找」）：整行可点，方框放大到手指点得到 */
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.3rem;
+  cursor: pointer;
+}
+.check-line input[type='checkbox'] {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  accent-color: var(--primary);
+}
+.input {
+  width: 100%;
+  min-height: 3.3rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 1.1rem;
+  font-family: inherit;
+  color: var(--ink);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+.input::placeholder {
+  color: var(--ink-3);
+}
+.input:focus {
+  outline: none;                       /* 换成立即可见的蓝边+环，不是把焦点藏了 */
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-1);
+}
+textarea.input {
+  min-height: 7rem;
+  line-height: 1.6;
+}
+.req {
+  color: var(--danger);
+  margin-left: 0.15rem;
+}
+.err {
+  color: var(--danger);
+  font-size: 0.95rem;
+  margin-top: 0.35rem;
+  font-weight: 600;
+}
+
+/* ================= 第 2 步「正在找岗位」的等待提示 =================
+   要让人一眼看出机器在干活，不然会以为死机了 */
+.finding {
+  background: var(--primary-1);
+  border: 1px solid #cfe6f6;
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1.1rem;
+  margin: 0.6rem 0 0.2rem;
+}
+.finding-t { font-weight: 700; margin: 0; font-size: 1.05rem; }
+.finding-s { color: var(--ink-2); font-size: 0.92rem; margin: 0.35rem 0 0; }
+.finding-w { color: var(--ink-2); font-size: 0.92rem; margin: 0.35rem 0 0; }
+
+/* ================= 可点选的大标签 ================= */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.chip {
+  min-height: 3.1rem;
+  padding: 0 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background var(--t-pop) var(--ease-out),
+    border-color var(--t-pop) var(--ease-out), color var(--t-pop) var(--ease-out),
+    transform var(--t-press) var(--ease-out);
+}
+.chip:active {
+  transform: scale(0.97);
+}
+.chip.on {
+  background: var(--primary-1);
+  border-color: var(--primary);
+  color: var(--primary-7);
+}
+/* 选中标记用 CSS 画，不用 ✓ 字符（禁 emoji/符号当图标） */
+.chip.on::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.72rem;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-0.06rem);
+  flex: none;
+}
+
+/* ================= 岗位卡片 ================= */
+.job {
+  display: flex;
+  gap: 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.1rem;
+  margin-bottom: 0.9rem;
+  align-items: flex-start;
+  cursor: pointer;
+  transition: border-color var(--t-pop) var(--ease-out),
+    background var(--t-pop) var(--ease-out), transform var(--t-press) var(--ease-out);
+}
+.job:active {
+  /* 整张卡是触控目标，按下要有回应（悬停态另见文末门控块） */
+  transform: scale(0.995);
+}
+.job.picked {
+  border-color: var(--primary);
+  background: var(--primary-1);
+}
+.job-pick {
+  flex: none;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 0;                        /* 里头的 ✓ 字符不显示，改用 CSS 画的勾 */
+  color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.job-pick::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.85rem;
+  border: solid currentColor;
+  border-width: 0 2.5px 2.5px 0;
+  /* 勾除了淡入还从 0.6 放大到 1：状态切换要有「长出来」的过程，
+     不是凭空出现（DESIGN.md：入场起点不小于 scale(0.9) 的精神，
+     这里是个 12px 的小勾，0.6 起步视觉上才看得出生长） */
+  transform: rotate(45deg) translateY(-0.08rem) scale(0.6);
+  opacity: 0;
+  transition: opacity var(--t-pop) var(--ease-out),
+    transform var(--t-pop) var(--ease-out);
+}
+.job.picked .job-pick {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.job.picked .job-pick::before {
+  opacity: 1;
+  transform: rotate(45deg) translateY(-0.08rem) scale(1);
+}
+.job-main {
+  flex: 1;
+  min-width: 0;
+}
+.job-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  letter-spacing: -0.01em;
+}
+.job-company {
+  font-size: 0.95rem;
+  color: var(--ink-2);
+  margin: 0 0 0.5rem;
+}
+.job-line {
+  font-size: 0.94rem;
+  margin: 0.25rem 0;
+}
+.job-line .k {
+  color: var(--ink-2);
+}
+.score {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.score.good { color: var(--accent); }
+.score.mid { color: var(--warn); }
+.score.low { color: var(--ink-2); }
+
+.badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.1rem 0.55rem;
+  border-radius: var(--radius-sm);
+  margin-right: 0.35rem;
+  white-space: nowrap;
+}
+.badge-central { background: var(--accent-1); color: #0f7a41; }
+.badge-state { background: var(--primary-1); color: var(--primary-7); }
+.badge-foreign { background: #f2ecfb; color: #5b2fa8; }
+.badge-institution { background: #e6f6f1; color: #0a7a60; }
+.badge-civil { background: #fceef4; color: #9c2a5e; }
+.badge-other { background: var(--surface-2); color: var(--ink-2); }
+.badge-warn { background: var(--warn-1); color: var(--warn); }
+.badge-recruit { background: var(--primary-1); color: var(--primary-7); }
+/* 「可代投」：公告里留了报名邮箱，第 4 步能一键代投（绿=好事） */
+.badge-mail { background: var(--accent-1); color: var(--accent-7); }
+/* 「可电话联系」：民企/基层岗位大多只留手机号、不留邮箱，这是给他们的入口。
+   用 primary 色系（蓝）与「可代投」的绿区分开：两者是两种不同的投递方式，
+   不是一个状态的两级，不该长得像同一个东西。 */
+.badge-phone { background: var(--primary-1); color: var(--primary-7); }
+.tel-link {
+  margin-left: 8px;
+  padding: 2px 10px;
+  border: 1px solid var(--primary-7);
+  border-radius: 999px;
+  color: var(--primary-7);
+  font-size: .88rem;
+  text-decoration: none;
+}
+
+/* 推荐理由：前头那个 ✓ 换成 CSS 画的勾 */
+.reason {
+  font-size: 0.9rem;
+  color: var(--primary-7);
+  margin: 0.2rem 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.reason::before {
+  content: '';
+  width: 0.36rem;
+  height: 0.62rem;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-top: 0.42rem;
+  flex: none;
+}
+/* 提醒：前头一个圆点，同样是 CSS 画的 */
+.tip-line {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  margin: 0.2rem 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+.tip-line::before {
+  content: '';
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: var(--ink-3);
+  margin-top: 0.62rem;
+  flex: none;
+}
+
+/* ================= 进度 ================= */
+.progress {
+  height: 1.4rem;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+/* 只动 transform，不动 width —— 动画 width 会触发逐帧重排。
+   条子铺满整条，靠 scaleX 缩放，左边对齐（transform-origin）。
+   240ms：原来 0.4s 超了 UI 动效 300ms 的上限；这里是「每发完一封跳一格」
+   的离散跳变，不是匀速运动，所以用 ease-out（立刻起步）而不是 linear。 */
+.progress > i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 240ms var(--ease-out);
+}
+.result-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.98rem;
+}
+.result-item .ok {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ================= 底部行动条 ================= */
+.navbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  /* env(safe-area-inset-bottom)：iPhone 底部小黑条，不加会把「下一步」挡住 */
+  padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 0.8rem;
+  z-index: 20;
+}
+.navbar::before {
+  /* 唯一一处投影：让行动条从内容上浮起来 */
+  content: '';
+  position: absolute;
+  inset: -8px 0 auto;
+  height: 8px;
+  background: linear-gradient(rgba(18, 38, 58, 0), rgba(18, 38, 58, 0.06));
+  pointer-events: none;
+}
+.navbar .btn {
+  flex: 1;
+}
+
+/* ================= 桌面端（≥1024px） =================
+   宽屏给更多呼吸空间：字号层级拉开，卡片内边距加大，岗位列表两列 */
+@media (min-width: 1024px) {
+  .shell {
+    padding-inline: 1.5rem;
+  }
+  .topbar {
+    padding-top: 2rem;
+  }
+  .topbar h1 {
+    font-size: 1.7rem;
+  }
+  .card {
+    padding: 1.6rem 1.5rem;
+  }
+  .card-title {
+    font-size: 1.3rem;
+  }
+  .stepbar .s {
+    font-size: 0.95rem;
+    padding: 0.65rem 0.9rem;
+  }
+  /* 岗位列表在宽屏排两列，一屏能比对更多 */
+  .shell.wide .job-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+  }
+  .shell.wide .job-list .job {
+    margin-bottom: 0;
+  }
+}
+
+/* ================= 手机适配（≤480px） =================
+   单列、贴边、触控目标不缩水 */
+@media (max-width: 480px) {
+  .shell {
+    padding-inline: 0.85rem;
+  }
+  .topbar {
+    padding-top: 1rem;
+    align-items: flex-start;
+  }
+  .topbar h1 {
+    font-size: 1.3rem;
+  }
+  .topbar .sub {
+    font-size: 0.8rem;
+  }
+  .topbar-actions .btn-mini {
+    padding: 0 0.7rem;
+  }
+  .stepbar {
+    gap: 0.3rem;
+  }
+  /* 窄屏把「序号」和「文字」竖着排。横排时 4 个步骤（圆圈+文字+留白）
+     加起来会超出 320px 屏宽被裁掉；竖排后每项只占文字宽度，四个放得下，
+     而且不用把文字藏掉 —— 这批用户靠文字认步骤。 */
+  .stepbar .s {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.2rem;
+    font-size: 0.75rem;
+    padding: 0.45rem 0.2rem;
+  }
+  .stepbar .s .n {
+    width: 1.45rem;
+    height: 1.45rem;
+    font-size: 0.78rem;
+  }
+  .card {
+    padding: 1.05rem 0.9rem;
+  }
+  .card-title {
+    font-size: 1.12rem;
+  }
+  .btn-big {
+    min-height: 4rem;
+    font-size: 1.2rem;
+  }
+  .job {
+    padding: 0.9rem 0.75rem;
+    gap: 0.7rem;
+  }
+  .job-title {
+    font-size: 1.05rem;
+  }
+  .chip {
+    padding: 0 0.95rem;
+  }
+  /* finesse mobile-floor M3：按钮上的字在任何宽度都不能折行。
+     「开始帮我找工作」这种 7 字标签在 375px 上会断成两行，
+     所以窄屏收字号和左右留白，宁可挤一点也不让它换行。 */
+  .navbar {
+    gap: 0.5rem;
+    padding-inline: 0.7rem;
+  }
+  .navbar .btn {
+    font-size: 0.98rem;
+    padding: 0 0.7rem;
+    white-space: nowrap;
+  }
+}
+
+/* 小屏（320 / 360）：再收一档，保证仍然不折行 */
+@media (max-width: 360px) {
+  .navbar .btn {
+    font-size: 0.9rem;
+    padding: 0 0.5rem;
+  }
+  .topbar h1 {
+    font-size: 1.18rem;
+  }
+  .stepbar .s {
+    font-size: 0.72rem;
+  }
+}
+
+/* ================= 悬停态：只在「真能悬停」的设备上生效 =================
+   触屏没有 hover，浏览器会在第一次点时伪造一个并挂住不放 —— 按钮点完
+   会一直停在悬停色，看起来像坏了。两个条件缺一不可：
+   hover:hover（主输入能悬停）排掉纯触屏；pointer:fine（指针精确）排掉
+   触控笔和少数谎报 hover 的安卓机。
+   规则：本文件所有 :hover 都必须住在这个块里。 */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    border-color: var(--primary);
+    color: var(--primary-7);
+  }
+  .btn-primary:hover {
+    background: var(--primary-7);
+    border-color: var(--primary-7);
+    color: #fff;
+  }
+  .stepbar .s.back:hover {
+    border-color: var(--primary);
+    background: var(--primary-1);
+  }
+  .chip:hover {
+    border-color: var(--primary);
+    color: var(--primary-7);
+  }
+  .job:hover {
+    border-color: var(--line-2);
+  }
+  .input:hover {
+    border-color: var(--line-2);
+  }
+}
+
+/* ================= 入场：列表错开出现 =================
+   岗位列表是「一次搜索出一批」，整屏同时冒出来很生硬；错开出现像一个个
+   摆上去。间隔 40ms、最多错开 8 项 —— 再往后一起出现即可，
+   不然翻到第 20 项要等 0.8 秒，反而像卡了。
+   用 opacity + 位移 8px，只动 transform/opacity，不触发重排。 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.job-list .job,
+.result-item {
+  animation: rise-in 260ms var(--ease-out) backwards;
+}
+.job-list .job:nth-child(1),
+.result-item:nth-child(1) { animation-delay: 0ms; }
+.job-list .job:nth-child(2),
+.result-item:nth-child(2) { animation-delay: 40ms; }
+.job-list .job:nth-child(3),
+.result-item:nth-child(3) { animation-delay: 80ms; }
+.job-list .job:nth-child(4),
+.result-item:nth-child(4) { animation-delay: 120ms; }
+.job-list .job:nth-child(5),
+.result-item:nth-child(5) { animation-delay: 160ms; }
+.job-list .job:nth-child(6),
+.result-item:nth-child(6) { animation-delay: 200ms; }
+.job-list .job:nth-child(7),
+.result-item:nth-child(7) { animation-delay: 240ms; }
+.job-list .job:nth-child(n + 8),
+.result-item:nth-child(n + 8) { animation-delay: 280ms; }
+
+/* ================= 无障碍：尊重系统的「减少动态效果」 =================
+   注意这里是「更少更轻」，不是「全砍」。原来的一刀切（全站 0.01ms）
+   把淡入淡出也一起灭了 —— 而颜色和透明度的过渡是帮人理解状态变化的，
+   砍掉反而更容易懵。正确的做法：保留颜色/透明度/阴影，去掉位移与缩放。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* 只允许「不产生空间移动」的属性继续过渡 */
+    transition-property: background-color, background, border-color, color,
+      opacity, box-shadow, outline-color, fill, stroke !important;
+    transition-duration: var(--t-pop) !important;
+    /* 其它动画一律瞬完，不要连播 */
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  /* 入场：收成纯淡入 —— 保留「有个东西出现了」这条信息，去掉位移 */
+  .job-list .job,
+  .result-item,
+  .modal-box {
+    animation: fade-only 160ms ease !important;
+  }
+  /* 所有按下缩放取消 —— 缩放也是空间运动 */
+  .btn:active,
+  .chip:active,
+  .job:active,
+  .pbtn:active,
+  .job-go:active {
+    transform: none !important;
+  }
+  /* 加载圈（.pull-spin）不在这里恢复：它的 keyframes 定义在 Step3 的
+     scoped 块里，Vue 会把名字加 hash 重命名，全局表里写 pullspin 对不上。
+     恢复规则写在 Step3Match.vue 自己的 style 里。 */
+}
+
+@keyframes fade-only {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ================= 零散 ================= */
+.center {
+  text-align: center;
+}
+.muted {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+.done-box {
+  text-align: center;
+  padding: 1.8rem 1rem;
+}
+.done-box .big {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0.3rem 0;
+  letter-spacing: -0.02em;
+}

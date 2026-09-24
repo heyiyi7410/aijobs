@@ -1,0 +1,107 @@
+# ===================== 数据与密钥：绝不入库 =====================
+data/
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+*.secret
+
+# ===================== Python =====================
+__pycache__/
+*.pyc
+*.pyo
+_pylibs/
+.venv/
+venv/
+
+# ===================== 前端依赖 / 构建产物 =====================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build.log
+frontend/install.log
+frontend/vite.config.js.timestamp-*.mjs
+frontend/preview-*.html
+frontend/preview-*.js
+
+# ===================== 项目内部记忆（内部笔记/技能，不公开）=====================
+.workbuddy/
+.impeccable.md
+
+# ===================== 大文件 / 扒来的第三方 / 临时数据 =====================
+*.raw.json
+jobonline_app.js
+_chunk75.js
+sr_tmp.json
+real_jobs.json
+_ref_sm.json
+_t.txt
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# ===================== 根目录临时探针 / 调试脚本 =====================
+probe_*.py
+probe_*.mjs
+jobonline_*.py
+collect_*.py
+bench_speed.py
+diag_*.py
+dump_*.py
+sync_jobs.py
+test_recon.py
+_ui_company.py
+build_city_codes.py
+check_jobonline.py
+collect_cities.py
+collect_demo.py
+py_sm4_test.py
+sm2_x.py
+start.py
+add_domain_nginx.py
+
+# ===================== 部署脚本 / 目录（含服务器信息，先排除，需要再加）=====================
+deploy/
+deploy_push.py
+deploy_ssh.py
+deploy_upload.py
+deploy_nginx.conf
+deploy_https_bootstrap.sh
+
+# ===================== 探索 / 截图 / 产物 =====================
+ui-shots/
+ui-company/
+ui-fields/
+design-verify/
+docs/
+autoapply_demo/
+autoapply_demo.py
+_impeccable.md
+login_check.png
+
+# ===================== backend 调试 / 探针脚本 =====================
+backend/__pycache__/
+backend/_archive/
+backend/_*/
+backend/probe_*.py
+backend/dump*.py
+backend/debug*.py
+backend/inspect*.py
+backend/netstat*.txt
+backend/backend_run.log
+backend/test_result.log
+backend/*_guopin*.py
+backend/_new_guopin.py.txt
+backend/_probe_t16.py
+backend/analyze_trace.py
+backend/record_session.py
+backend/fixture_*.html
+backend/e2e_*.py
+backend/test_guopin_wizard.py
+backend/seed_*.py
+backend/backfill_*.py
+backend/check_login.py
+backend/discover_sources.py
+backend/apply_new_guopin.py
