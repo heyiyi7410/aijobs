@@ -9,8 +9,9 @@
         <p class="sub">帮您准备简历、筛选合适的单位和岗位<br />一步一步完成投递，找工作更轻松</p>
       </div>
       <div class="topbar-actions">
-        <button class="btn-hero" @click="toggleFont" :aria-pressed="store.bigFont">
-          {{ store.bigFont ? 'A-' : 'A+' }}
+        <button class="btn-hero font-switch" @click="toggleFont" :aria-pressed="store.bigFont"
+          :aria-label="store.bigFont ? '切换为标准字号' : '切换为大字号'">
+          <span>A-</span><i aria-hidden="true"></i><span>A+</span>
         </button>
         <button class="btn-hero" @click="readAloud" v-if="canSpeak" aria-label="朗读这一步的说明">
           <!-- 禁 emoji 当图标：用 SVG 喇叭 -->
@@ -82,11 +83,7 @@ const HINTS = {
 const p = store.profile
 const cityNow = computed(() => effectiveCity() || '不限城市')
 
-const nextText = computed(() => {
-  if (store.step === 1) return '下一步：选单位'
-  if (store.step === 2) return '开始帮我找工作'
-  return '去投递（已选 ' + store.picked.length + ' 个）'
-})
+const nextText = computed(() => '下一步')
 
 function toggleFont() {
   store.bigFont = !store.bigFont
