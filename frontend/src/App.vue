@@ -114,7 +114,8 @@ watch(
   () => store.bigFont,
   v => {
     document.documentElement.style.fontSize = v ? '23px' : '18px'
-  }
+  },
+  { immediate: true }
 )
 
 function readAloud() {
