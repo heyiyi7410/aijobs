@@ -222,7 +222,7 @@
          主动实时抓一次，抓回来立即合并进列表。 -->
     <div v-if="shown.length && !store.companyFilter">
       <div v-if="pulling" class="pull-more loading">
-        <span class="pull-spin">⟳</span> 正在手动抓取最新职位…（要跑好几家网站，约 10~30 秒，请稍等）
+        <span class="pull-spin" aria-hidden="true"></span> 正在手动抓取最新职位…（要跑好几家网站，约 10~30 秒，请稍等）
       </div>
       <div v-else-if="showHint" class="pull-more" @click="loadMore"
         role="button" tabindex="0"
