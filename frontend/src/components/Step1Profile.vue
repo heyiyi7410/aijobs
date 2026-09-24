@@ -1,7 +1,6 @@
 <template>
   <div>
     <div class="card">
-      <div class="card">
       <div class="card-head">
         <span class="tile" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -73,6 +72,7 @@
         </div>
       </div>
 
+    <div class="card">
       <div class="card-head">
         <span class="tile" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
