@@ -11,7 +11,7 @@
         </span>
         <h2 class="card-title">上传简历并智能解析</h2>
       </div>
-      <p class="card-hint">支持 PDF、Word、txt、md 格式，自动读取简历信息。手机或电脑里那份简历都可以，我读一遍，把名字、电话、邮箱这些自动填到下面，你只要核对一下。</p>
+      <p class="card-hint">上传现有简历后，我会自动读取并填写下面的信息，你只需要核对。</p>
 
       <!-- ============ 有简历就先传，省得打字 ============ -->
       <div class="up-box">
@@ -29,18 +29,13 @@
             <small>支持 PDF / Word / txt / md</small>
           </span>
         </button>
-        <p class="up-hint" style="margin:.55rem 0 0;">
-          不会找文件？让身边年轻人帮你点一下，或者跳过这步，下面照着填也很快。
-        </p>
+        <p class="up-hint" style="margin:.55rem 0 0;">没有简历也可以跳过，直接填写下面的信息。</p>
 
         <label class="up-keep">
           <input type="checkbox" class="switch" v-model="keepResume">
           <span>留着这份简历，自动投的时候直接用它</span>
         </label>
-        <p class="up-hint" style="margin:.35rem 0 0;">
-          留着的话，单位收到的就是你这份原件（照片、排版都在）。
-          不留的话，自动投只能用下面这些文字拼一页，照片和排版就没有了。
-        </p>
+        <p class="up-hint" style="margin:.35rem 0 0;">开启后，自动投递时会优先使用这份原始简历。</p>
 
         <p v-if="msg" class="up-msg" :class="isWarn ? 'up-warning' : 'up-ok'">{{ msg }}</p>
         <p v-if="err" class="up-msg up-err">{{ err }}</p>
@@ -84,9 +79,7 @@
         <h2 class="card-title">基本信息<span class="soft">带 * 为必填</span></h2>
       </div>
 
-      <p class="up-or">
-        <span>没有简历的话，下面这些问题照着填也行</span>
-      </p>
+      <p class="up-or"><span>请核对或补充下面的信息</span></p>
 
       <div class="field">
         <label for="f1">你叫什么名字<span class="req">*</span><Tag k="name" /></label>
