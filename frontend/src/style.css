@@ -1400,3 +1400,95 @@ textarea.input {
     font-size: 1.08rem;
   }
 }
+
+/* Step3 底部选中状态条：与最终效果图一致，固定在导航按钮上方 */
+.selected-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  min-height: 2.3rem;
+  padding: .35rem .7rem;
+  border-radius: .65rem;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: .92rem;
+  font-weight: 600;
+}
+.selected-strip b {
+  color: var(--primary-7);
+  font-size: 1.08rem;
+}
+.selected-dot {
+  width: .95rem;
+  height: .95rem;
+  flex: none;
+  background: var(--check-badge) center / contain no-repeat;
+}
+
+/* Step3 说明状态分层 */
+.relax-tip.info-blue {
+  color: var(--primary-7);
+  background: var(--primary-1);
+}
+.relax-tip.info-green {
+  color: var(--accent-7);
+  background: var(--accent-1);
+}
+.relax-tip.info-warn {
+  color: var(--warn);
+  background: var(--warn-1);
+}
+
+/* Step4 两组投递方式更像独立主卡片 */
+.group-mail {
+  border-color: #cfe9dd;
+  background: linear-gradient(180deg, #fbfffd 0%, var(--surface) 100%);
+  box-shadow: 0 3px 12px rgba(34, 176, 113, .06);
+}
+.group-link {
+  border-color: #d9e6f7;
+  background: linear-gradient(180deg, #fcfdff 0%, var(--surface) 100%);
+  box-shadow: 0 3px 12px rgba(31, 122, 242, .05);
+}
+.group-mail .group-head {
+  padding-bottom: .55rem;
+  border-bottom: 1px solid #e3f1ea;
+}
+.group-link .group-head {
+  padding-bottom: .55rem;
+  border-bottom: 1px solid #e7eef8;
+}
+
+/* 手机进一步收紧顶部与岗位卡，避免 390px 宽时评分块挤标题 */
+@media (max-width: 430px) {
+  .topbar-in {
+    flex-direction: column;
+    align-items: stretch;
+    gap: .7rem;
+  }
+  .topbar-actions {
+    justify-content: flex-end;
+    padding-top: 0;
+  }
+  .job-top {
+    gap: .5rem;
+  }
+  .job-score {
+    min-width: 4.4rem;
+    padding-inline: .4rem;
+  }
+  .job-score b {
+    font-size: 1.42rem;
+  }
+  .job-title {
+    font-size: 1.12rem;
+  }
+  .badge {
+    font-size: .76rem;
+    padding-inline: .5rem;
+  }
+  .navbar {
+    padding-inline: .8rem;
+  }
+}
