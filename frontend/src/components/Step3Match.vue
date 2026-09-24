@@ -646,6 +646,9 @@ onUnmounted(() => {
 
 /* 手机屏放不下「内容 + 右侧链接」，让链接整行落到卡片底部（更好点按） */
 @media (max-width: 480px) {
+  .csearch-row .btn {
+    width: 100%;
+  }
   .job { flex-wrap: wrap; }
   .job-go {
     flex: 1 1 100%;
