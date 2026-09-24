@@ -1,6 +1,7 @@
 <template>
   <div>
     <div class="card">
+      <div class="card">
       <div class="card-head">
         <span class="tile" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -45,6 +46,7 @@
         <p v-if="msg" class="up-msg" :class="isWarn ? 'up-warning' : 'up-ok'">{{ msg }}</p>
         <p v-if="err" class="up-msg up-err">{{ err }}</p>
       </div>
+    </div>
 
       <!-- ============ 简历读到的：单独一张卡（效果图） ============ -->
       <div v-if="got.length" class="card">
