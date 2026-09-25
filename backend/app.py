@@ -22,7 +22,7 @@ import mailer
 import autofill
 import tailor
 import resume_parser
-from ai_matcher import match_jobs, INTENT_SYNONYMS
+from ai_matcher import match_jobs, search_words, intent_labels
 from collectors import (collect_jobs, collect_jobs_with_report, NATURES,
                         DEFAULT_NATURES, _city_scope)
 from collectors.base import DEFAULT_APPLY_URL
@@ -566,29 +566,9 @@ def _collect_for_profile(profile, force=False, wide=True):
     # 于是退回 DEFAULT_NATURES（含事业单位、公务员）——用户明明只勾了
     # 「央企+国企」，却照样搜出事业单位（2026-09-21 实测：武汉混进 1 条武大岗位）。
     natures = profile.get('natures') or profile.get('nature')
-    kw = (profile.get('keyword') or '').strip()
-
-    # 把「意向大类」展开成可搜的真实词
-    words = []
-    if kw:
-        words.append(kw)
-    for t in (profile.get('jobTypes') or []):
-        t = (t or '').strip()
-        if not t:
-            continue
-        syns = INTENT_SYNONYMS.get(t)
-        if syns:
-            words.extend(syns)          # 电工、焊工、维修……这些才是岗位里真出现的词
-        else:
-            words.append(t)
-    # 技能本身就是真词（电工证 / 会开车 / 有叉车证…），直接加进去
-    for s in (profile.get('skills') or []):
-        s = (s or '').strip()
-        if s:
-            words.append(s)
-    # 去重并限量，别把对方站点打疼
-    _seen = set()
-    words = [w for w in words if not (w in _seen or _seen.add(w))][:5]
+    # 缓存与评分共用完整扩展词；只有实时请求数量限为五个。
+    words = search_words(profile)
+    targeted = bool(intent_labels(profile))
 
     # 投过的岗位不再重复出现
     pid = profile.get('id') or profile.get('profile_id')
@@ -636,7 +616,7 @@ def _collect_for_profile(profile, force=False, wide=True):
 
         rows = _db(city=city, keywords=words) if words else []
         relaxed = False
-        if len(rows) < 8:                       # 关键词命中太少，补一轮宽搜（同现爬 MIN_KEYWORD_HITS）
+        if not targeted and len(rows) < 8:
             got = {j.get('key') for j in rows}
             for j in _db(city=city):
                 if j.get('key') not in got:
@@ -660,7 +640,7 @@ def _collect_for_profile(profile, force=False, wide=True):
         if city and wide and len([j for j in rows if not j.get('nearby')]) < 5:
             relaxed = True
             got = {j.get('key') for j in rows}
-            for j in _db(city=''):
+            for j in _db(city='', keywords=words if targeted else None):
                 if j.get('key') in got:
                     continue
                 got.add(j.get('key'))
@@ -714,15 +694,20 @@ def _collect_for_profile(profile, force=False, wide=True):
                                         exclude=exclude, include_wide=wide)
 
     with futures.ThreadPoolExecutor(max_workers=max(1, min(len(words), 5))) as ex:
-        reps = list(ex.map(_run, words))
+        reps = list(ex.map(_run, words[:5]))
     for rep in reps:
         _merge(rep)
 
     # 岗位太少：补一轮「只看城市+单位性质、不限关键词」的宽搜，保证有得挑
-    if len(agg['jobs']) < MIN_KEYWORD_HITS:
+    if not targeted and len(agg['jobs']) < MIN_KEYWORD_HITS:
         _merge(collect_jobs_with_report(keyword='', city=city, natures=natures,
                                         exclude=exclude, include_wide=wide))
 
+    # 来源自身可能退回宽搜；明确选了职位时，不把无关岗位冒充命中结果。
+    if targeted:
+        agg['jobs'] = [j for j in agg['jobs'] if any(
+            w.casefold() in ' '.join([j.get('title') or '', j.get('desc') or '', j.get('company') or '']).casefold()
+            for w in words)]
     agg['total'] = len(agg['jobs'])
     if force:
         agg['manual'] = True                    # 前端据此区分「手动实时抓取」

@@ -1,4 +1,5 @@
 <template>
+  <div class="reference-ui">
   <!-- hero 顶栏：蓝色渐变、全宽铺开（效果图）。装饰是纯 CSS 画的纸+放大镜 -->
   <header class="topbar" :class="{ wide: store.step === 3 }">
     <span class="hero-doc" aria-hidden="true"></span>
@@ -41,11 +42,12 @@
       <p class="finding-w">已经跑了 {{ waited }} 秒。一般十来秒就好，找到会一次全给你。如果最后显示 0 个，说明当前意向确实没有正在报名的岗位——不是程序出错，换个城市或工种再试。</p>
     </div>
 
-    <p v-if="store.err" class="err-banner">
+    <p v-if="store.err && store.step === 4" class="err-banner" role="alert">
       {{ store.err }}
     </p>
 
     <nav class="navbar" v-if="store.step < 4">
+      <p v-if="store.err" class="nav-error" role="alert">{{ store.err }}</p>
       <!-- 第 2 步：当前选择偏好一览（效果图的小条） -->
       <div v-if="store.step === 2" class="pref">
         <span class="pref-t">当前选择偏好</span>
@@ -58,10 +60,11 @@
       <div class="navbar-btns">
         <button class="btn" v-if="store.step > 1" @click="go(store.step - 1)">上一步</button>
         <button class="btn btn-primary" :disabled="store.loading" @click="next">
-          {{ store.loading ? '正在找…' : nextText }}
+          {{ store.loading ? (store.step === 1 ? '正在保存…' : '正在找岗位…') : nextText }}
         </button>
       </div>
     </nav>
+  </div>
   </div>
 </template>
 
@@ -87,7 +90,7 @@ const HINTS = {
 const p = store.profile
 const cityNow = computed(() => effectiveCity() || '不限城市')
 
-const nextText = computed(() => '下一步')
+const nextText = computed(() => ({ 1: '下一步：选单位', 2: '帮我找岗位', 3: '去投递' }[store.step]))
 
 function toggleFont() {
   store.bigFont = !store.bigFont
@@ -140,6 +143,7 @@ async function next() {
   const p = store.profile
 
   if (store.step === 1) {
+    store.profilePanel = 'basic'
     if (!p.name.trim()) return (store.err = '请填写你的名字')
     if (!/^1\d{10}$/.test(p.phone.trim())) return (store.err = '请填写正确的 11 位手机号')
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim()))
@@ -168,7 +172,7 @@ async function next() {
     // 工种可以选大类，也可以在第 2 步自己填关键词，二者有其一就行
     if (!p.jobTypes.length && !(p.keyword || '').trim())
       return (store.err = '选一下你想做什么工作，或者自己填一个工种')
-    if (!effectiveCitySync()) return (store.err = '选一个城市，或者自己填上')
+    effectiveCitySync() // 空城市代表“不限城市”，也是有效的搜索范围。
 
     store.loading = true
     startWait()

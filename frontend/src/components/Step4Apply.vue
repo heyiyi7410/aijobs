@@ -7,12 +7,12 @@
          代投按钮只对能代投那组生效、并且在按钮上写明是几个；
          没邮箱的那组明确告诉用户「只能去官网投」，并提供逐个投递 + 自动填表。
          屏幕上看不见的岗位不该被投出去，也不该被悄悄跳过。 -->
-    <div v-if="mode === 'idle'" class="card">
+    <div v-if="mode === 'idle'" class="card apply-overview">
       <!-- 发件邮箱的入口摆在标题这一行，谁都看得见。
            之前它藏在「能代投」那一组里、而且只在没配过邮箱时才渲染 ——
            库里 2749 个岗位只有 14 个有报名邮箱，所以大多数时候那一组压根不出现，
            用户找遍这一屏也找不到「在哪儿设置邮箱」。入口必须与内容无关地常驻。 -->
-      <div class="card-head">
+      <div v-if="!mailJobs.length" class="card-head">
         <span class="tile tile-purple" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -30,9 +30,8 @@
           </button>
         </span>
       </div>
-      <p class="card-hint">
-        你选了 {{ jobs.length }} 个单位。能不能替你代投，看公告里有没有留报名邮箱——
-        下面按这个分成两组，怎么投写在每组里。
+      <p v-if="!mailJobs.length" class="card-hint">
+        已选 {{ jobs.length }} 个岗位，请选择对应的投递方式。
       </p>
 
       <!-- ---- 组 1：公告里留了报名邮箱 → 能替你代投 ---- -->
@@ -47,25 +46,26 @@
           </span>
           <span class="group-title">能代投（有邮箱）</span>
           <span class="tag tag-ok">推荐</span>
-          <b class="group-count">{{ mailJobs.length }} 个</b>
+          <button class="text-link" @click="openSetup">设置发件邮箱</button>
         </div>
         <p class="group-note">
-          这些岗位公告里留了报名邮箱。<b>配上你的发件邮箱，点一下就能全发出去</b>，
-          不用一家家跑网站。
+          已选择 {{ mailJobs.length }} 个岗位，将使用您的邮箱投递
         </p>
-        <div v-for="j in mailJobs" :key="j.key" class="result-item">
-          <span>{{ j.title }} · {{ j.company }}</span>
-          <span class="ri-extra">{{ j.hr_email }}</span>
+        <div class="apply-tools">
+          <label class="tailor-control"><input type="checkbox" class="switch" v-model="tailorOn" @change="onTailorToggle" /><span><b>按岗位定制简历</b><small>根据岗位要求调整简历内容</small></span></label>
+          <button @click="openLlm"><b>AI 智能配置</b><small>{{ llmReady ? '已配置，可定制简历' : '配置模型后启用' }}</small></button>
+        </div>
+        <div v-for="j in mailJobs" :key="j.key" class="result-item apply-job-row">
+          <div><b>{{ j.title }}</b><small>{{ j.company }} · {{ j.city }}</small></div>
+          <b class="apply-salary">{{ j.salary_text }}</b>
+          <span class="apply-status">待投递</span>
         </div>
 
         <!-- 没配发件邮箱时，这里不再自己长出一套表单（原来那套只在有邮箱的岗位上
              才出现，用户根本找不到）。改成一句话把人指到标题那行的按钮上。 -->
         <div v-if="!mailReady" class="cfg">
           <p class="group-note">
-            <b>还没设置发件邮箱，所以这几封我发不出去。</b>
-            点右上角「设置发件邮箱」，填你的邮箱和授权码就能替你发 ——
-            要先在邮箱网页版把 SMTP 服务打开，那里面写了每一步怎么点。
-            不想设置也可以走下面的「用我自己的邮箱一封封发」。
+            设置发件邮箱后即可代发；也可以使用自己的邮箱逐封发送。
           </p>
           <button class="btn btn-primary" style="width:100%;" @click="openSetup">
             设置发件邮箱（开启 SMTP）
@@ -96,11 +96,7 @@
                链路：toggle 打开 → 立刻拉每个岗位的预览（只读，给「原文→改成→为什么」）
                → 用户看清后点「生成 N 份」→ 后端把定制版 docx 落盘 → 一键代投时
                替原简历当附件发出去。事实门没过的岗位退回原件（绝不发编造内容）。 -->
-          <div class="cfg-block" style="margin-top:.9rem;">
-            <label class="switch-row">
-              <input type="checkbox" class="switch" v-model="tailorOn" @change="onTailorToggle" />
-              <span>按岗位定制简历（AI 据招聘要求改写/重排，生成专版附件）</span>
-            </label>
+          <div v-if="tailorOn" class="cfg-block" style="margin-top:.9rem;">
             <p class="muted" v-if="tailorOn && !llmReady" style="margin:.4rem 0 0;">
               还没配置大模型，定制功能用不了。点右上角「配置 AI」填一下 base_url / 密钥 / 模型。
             </p>
@@ -143,6 +139,7 @@
         <!-- 这条也会先弹一个「用哪个邮箱发」的选择框。
              原来直接调 mailto: —— 电脑上没装邮件 App 时什么都不会发生，
              用户点了没反应，也不知道该去哪儿发。 -->
+        <details class="other-mail-method"><summary>其他方式：使用自己的邮箱发送</summary>
         <button class="btn" style="margin-top:.8rem;" @click="openPicker('batch')">
           用我自己的邮箱一封封发（{{ mailJobs.length }} 封）
         </button>
@@ -150,12 +147,10 @@
           这条不经过服务器，由你亲手发出去：选一个你常用的邮箱，我帮你打开它的写信页，
           标题和正文复制好，你粘上就发。
         </p>
+        </details>
       </div>
 
-      <p v-else class="group-empty">
-        这次选的岗位<b>都没有公开邮箱</b>，代投发不出去，只能去它们的招聘网站投 ——
-        走下面那一组。
-      </p>
+      <p v-else class="group-empty">所选岗位均无公开邮箱，请到招聘官网投递。</p>
 
       <!-- ---- 组 2：没留邮箱 → 只能自己去官网投（自动填表帮忙） ---- -->
       <div v-if="linkJobs.length" class="group group-link">
@@ -171,27 +166,35 @@
           <b class="group-count">{{ linkJobs.length }} 个</b>
         </div>
         <p class="group-note">
-          这些单位只在自家招聘网站上收简历，没有公开邮箱，邮件发不出去。
-          点「开始逐个投递」，我一家一家帮你打开，并用<b>自动填表</b>把简历填进去——
-          你只要在旁边看着，遇到需要你本人出面的地方（验证码、承诺书、最终提交）点一下。
+          逐个打开招聘网站，可使用自动填表。登录、验证码和最终提交需要你本人完成。
         </p>
+        <details class="website-jobs"><summary>查看 {{ linkJobs.length }} 个官网投递岗位</summary>
         <div v-for="j in linkJobs" :key="j.key" class="result-item">
           <span>{{ j.title }} · {{ j.company }}</span>
           <span class="ri-extra muted">无公开邮箱</span>
         </div>
+        </details>
         <button class="btn btn-primary btn-big" @click="startLink">
           开始逐个投递（{{ linkJobs.length }} 个）
         </button>
       </div>
 
       <p v-if="mailJobs.length && linkJobs.length" class="group-split">
-        两组可以分开做、也可以都做：上面那组点一下按钮就全发完了，
-        下面那组要一家家过。建议先把邮件发掉，再慢慢投官网。
+        两组分别操作，完成邮件投递后，可继续投官网岗位。
       </p>
 
-      <button class="btn btn-big" style="margin-top:1rem;" @click="go(3)">
-        ← 回去再挑几个岗位
-      </button>
+    </div>
+
+    <div v-if="mode === 'idle' && !task" class="card progress-overview">
+      <div class="card-head"><span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 20V12M12 20V4M19 20V8" /></svg></span><h2 class="card-title">投递进度</h2></div>
+      <div class="progress"><i style="transform:scaleX(0)"></i></div>
+      <p class="progress-empty">尚未开始投递 · 已选择 {{ jobs.length }} 个岗位</p>
+    </div>
+    <div v-if="mode === 'idle' && linkJobs.length" class="card autofill-overview">
+      <div class="card-head"><span class="tile tile-purple" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6" /></svg></span><h2 class="card-title">自动填表<span class="soft">测试版</span></h2></div>
+      <p class="card-hint">部分官网支持自动填写，帮您节省时间。</p>
+      <div class="autofill-capabilities"><div><b>可帮您填写</b><p>个人信息、教育与工作经历</p></div><div><b>需要您亲自操作</b><p>登录、验证码和最终提交</p></div></div>
+      <button class="text-link" @click="startLink">选择岗位，开始填表</button>
     </div>
 
     <!-- ============ 逐个投递 ============ -->
@@ -486,7 +489,7 @@
             按一下就知道授权码填对没填对，比真发一封碰运气强。
           </p>
 
-          <h4 class="modal-h4">授权码怎么拿？照着你用的邮箱做一次</h4>
+          <details class="mail-help"><summary>授权码怎么拿？照着你用的邮箱做一次</summary>
           <p class="modal-warn">
             <b>授权码不等于登录密码。</b>填登录密码一定发不出去 ——
             这是最常卡住的地方。下面是各家邮箱「在哪儿开服务、要填什么」。
@@ -518,6 +521,7 @@
             <p v-if="!providers.length" class="modal-note">说明正在加载，稍等一下再打开。</p>
           </div>
 
+          </details>
         </div>
       </div>
     </div>
@@ -1358,7 +1362,7 @@ function badgeClass(n) {
   flex-wrap: wrap;
   margin-bottom: .35rem;
 }
-.card-head .card-title { margin: 0; }
+.card-head .card-title { margin: 0; flex: 1; }
 .head-btns {
   margin-left: auto;
   display: flex;
@@ -1423,7 +1427,11 @@ function badgeClass(n) {
 }
 .step4-footer .btn {
   flex: 1;
+  min-width: 0;
+  padding-inline: .6rem;
+  font-size: 1rem;
 }
+.step4-footer .btn-primary { flex: 1.4; }
 .step4-footer .btn:not(.btn-primary) {
   color: var(--primary-7);
   border-color: var(--primary);

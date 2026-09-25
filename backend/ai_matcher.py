@@ -44,6 +44,35 @@ EXP_MAP = {
     '5年以上': 6,
 }
 
+# 细分职位只扩展相关叫法，不用「老师」「托管」等泛词，避免金融托管误命中。
+ROLE_ALIASES = [
+    ['托管老师', '托管教师', '托辅老师', '午托老师', '晚托老师', '课后托管', '作业辅导老师'],
+    ['幼儿教师', '幼儿园教师', '幼师'],
+    ['保育员', '保育老师'], ['助教', '教学助理'],
+    ['行政文员', '行政助理', '办公室文员'], ['前台接待', '前台文员'],
+    ['人事专员', '人力资源专员'], ['仓库管理员', '仓管员', '库管员'],
+    ['质检员', '质量检验员'], ['货运司机', '货车司机'],
+    ['保洁员', '清洁工'], ['家政阿姨', '家政服务员', '保姆'],
+    ['育婴师', '育婴员'], ['软件开发', '软件工程师', '程序员'],
+]
+
+
+def intent_labels(profile):
+    # 保留英文职位中的空格，如 Java developer；中文标点/换行分隔多个意向。
+    typed = re.split(r'[,，、;；/\n]+', profile.get('keyword') or '')
+    return list(dict.fromkeys(s.strip() for s in typed + list(profile.get('jobTypes') or []) if s and s.strip()))
+
+
+def search_words(profile):
+    """缓存和评分使用全部词；交错展开，避免第一个大类占满实时搜索配额。"""
+    groups = []
+    for label in intent_labels(profile):
+        aliases = next((g for g in ROLE_ALIASES if label in g), None)
+        groups.append(list(dict.fromkeys([label] + aliases)) if aliases else INTENT_SYNONYMS.get(label) or [label])
+    if not groups:
+        groups = [[s] for s in profile.get('skills') or [] if s]
+    return list(dict.fromkeys(group[i] for i in range(max(map(len, groups), default=0)) for group in groups if i < len(group)))
+
 EDU_ORDER = ['不限', '小学', '初中', '高中中专', '大专', '本科及以上']
 
 
@@ -123,17 +152,15 @@ def score_job(profile, job):
         tips.append('这个岗位更看重别的技能，可以看看同类岗位')
 
     # 2) 求职意向命中
-    intents = profile.get('jobTypes') or []
-    words = []
-    for it in intents:
-        words += INTENT_SYNONYMS.get(it, [it])
-    title = job.get('title', '')
+    intents = intent_labels(profile)
+    words = [w.casefold() for w in search_words(profile)] if intents else []
+    title = (job.get('title') or '').casefold()
     intent_score = 1.0 if any(w in title for w in words if w) else (
-        0.5 if any(w in job_text for w in words if w) else 0.0
+        0.5 if any(w in job_text.casefold() for w in words if w) else 0.0
     )
     if intent_score >= 1.0:
         reasons.append('和你选的「%s」是对口的' % '/'.join(intents[:2]))
-    elif intent_score == 0:
+    elif intent_score == 0 and intents:
         tips.append('这个岗位跟你想做的工作不是一类，可以跳过')
 
     # 3) 单位性质（央企 / 国企 / 外企 / 合资 / 民营）

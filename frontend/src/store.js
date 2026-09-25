@@ -3,6 +3,8 @@ import { DEFAULT_NATURES } from './options'
 
 export const store = reactive({
   step: 1,
+  profilePanel: 'basic',
+  resumeReview: { got: [], low: [], filled: [], resumeName: '', parsedAt: '' },
   maxStep: 1,       // 已经走到过哪一步：走过的能点回去，没到过的不让跳（点进去会是空白）
   bigFont: false,
   profile: {

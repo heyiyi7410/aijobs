@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <div class="card">
+  <div class="profile-page">
+    <div class="card upload-card">
       <div class="card-head">
         <span class="tile" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -11,7 +11,7 @@
         </span>
         <h2 class="card-title">上传简历并智能解析</h2>
       </div>
-      <p class="card-hint">上传现有简历后，我会自动读取并填写下面的信息，你只需要核对。</p>
+      <p class="card-hint">支持 PDF、Word、txt、md 格式，自动读取简历信息</p>
 
       <!-- ============ 有简历就先传，省得打字 ============ -->
       <div class="up-box">
@@ -29,21 +29,24 @@
             <small>支持 PDF / Word / txt / md</small>
           </span>
         </button>
-        <p class="up-hint" style="margin:.55rem 0 0;">没有简历也可以跳过，直接填写下面的信息。</p>
+        <div v-if="resumeName" class="uploaded-file">
+          <span class="file-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6" /></svg></span>
+          <div><b>{{ resumeName }}</b><small>已解析成功 · {{ parsedAt }}</small></div>
+          <button class="btn btn-mini" :disabled="busy" @click="fileEl.click()">重新上传</button>
+        </div>
 
         <label class="up-keep">
           <input type="checkbox" class="switch" v-model="keepResume">
-          <span>留着这份简历，自动投的时候直接用它</span>
+          <span>留着这份简历，自动投直接用原件</span>
         </label>
-        <p class="up-hint" style="margin:.35rem 0 0;">开启后，自动投递时会优先使用这份原始简历。</p>
 
-        <p v-if="msg" class="up-msg" :class="isWarn ? 'up-warning' : 'up-ok'">{{ msg }}</p>
+        <p v-if="msg && isWarn" class="up-msg up-warning">{{ msg }}</p>
         <p v-if="err" class="up-msg up-err">{{ err }}</p>
       </div>
     </div>
 
       <!-- ============ 简历读到的：单独一张卡（效果图） ============ -->
-      <div v-if="got.length" class="card">
+      <div v-if="got.length" class="card resume-review">
         <div class="card-head">
           <span class="tile tile-green" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -53,21 +56,22 @@
             </svg>
           </span>
           <h2 class="card-title">简历读到的<span class="soft">核对一下</span></h2>
+          <button class="text-link" @click="editBasic">手动修改</button>
         </div>
         <div class="up-got">
-          <div v-for="g in got" :key="g.key" class="up-row">
+          <div v-for="g in got.slice(0, 6)" :key="g.key" class="up-row">
             <span>{{ g.label }}</span>
             <span :class="low.includes(g.key) ? 'up-warn' : 'up-val'">
               {{ fmt(g.value) }}<template v-if="low.includes(g.key)">　核对一下</template>
             </span>
           </div>
-          <p class="up-hint" style="margin-top:.7rem;">
-            下面已经照着填好了，从头到尾看一遍，有不对的直接改。
-          </p>
         </div>
+        <details v-if="got.length > 6" class="review-more"><summary>查看其余 {{ got.length - 6 }} 项</summary>
+          <div v-for="g in got.slice(6)" :key="g.key" class="up-row"><span>{{ g.label }}</span><span>{{ fmt(g.value) }}</span></div>
+        </details>
       </div>
 
-    <div class="card">
+    <div class="card basic-card">
       <div class="card-head">
         <span class="tile" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -79,10 +83,8 @@
         <h2 class="card-title">基本信息<span class="soft">带 * 为必填</span></h2>
       </div>
 
-      <p class="up-or"><span>请核对或补充下面的信息</span></p>
-
       <div class="field">
-        <label for="f1">你叫什么名字<span class="req">*</span><Tag k="name" /></label>
+        <label for="f1"><span class="req">*</span>姓名<Tag k="name" /></label>
         <div style="display:flex; gap:.6rem;">
           <input id="f1" class="input" v-model="p.name" placeholder="例如：张三" />
           <button v-if="canRec" class="btn mic-btn" :class="{ 'btn-primary': mic === 'name' }"
@@ -95,30 +97,33 @@
               <path d="M12 17v4" />
               <path d="M9 21h6" />
             </svg>
-            <span>{{ mic === 'name' ? '停止' : '语音' }}</span>
           </button>
         </div>
       </div>
 
       <div class="field">
-        <label for="f2">手机号<span class="req">*</span><Tag k="phone" /></label>
+        <label for="f2"><span class="req">*</span>手机号<Tag k="phone" /></label>
         <input id="f2" class="input" v-model="p.phone" inputmode="numeric" maxlength="11"
-          placeholder="11 位手机号，单位会打这个号找你" />
-        <p class="tip">只用来给你打电话通知面试，不会给别人。</p>
+          placeholder="11 位手机号" />
       </div>
 
       <div class="field">
-        <label for="f3">你的邮箱<span class="req">*</span><Tag k="email" /></label>
+        <label for="f3"><span class="req">*</span>邮箱<Tag k="email" /></label>
         <input id="f3" class="input" v-model="p.email" placeholder="例如：123456@qq.com" />
-        <p class="tip">
-          单位回复会直接发到这个邮箱。没有邮箱？用手机号就能注册一个 QQ 邮箱。
-        </p>
       </div>
-
       <div class="field">
-        <label for="f4">今年多大（可以不填）<Tag k="age" /></label>
-        <input id="f4" class="input" v-model="p.age" inputmode="numeric" maxlength="3" placeholder="例如：32" />
+        <label for="f4">年龄<Tag k="age" /></label>
+        <input id="f4" class="input" v-model="p.age" inputmode="numeric" maxlength="3" placeholder="选填" />
       </div>
+      <div class="profile-extras" role="group" aria-label="补充资料入口">
+        <button :aria-expanded="panel === 'skills'" @click="panel = panel === 'skills' ? 'basic' : 'skills'">技能与经历 <span>{{ p.skills.length ? '已选 ' + p.skills.length + ' 项技能' : '选填' }}</span></button>
+        <button :aria-expanded="panel === 'more'" @click="panel = panel === 'more' ? 'basic' : 'more'">更多个人资料 <span>学历、工作年限等</span></button>
+      </div>
+    </div>
+
+    <div v-show="panel === 'more'" class="profile-more">
+      <details class="card profile-disclosure" open>
+        <summary>个人资料<span>性别、出生年月</span></summary>
 
       <div class="field">
         <label>你的性别<Tag k="gender" /></label>
@@ -135,9 +140,11 @@
         <p class="tip">招聘表基本都问这个。写年份和月份就行，比如 1999-05。</p>
       </div>
 
+      </details>
+      <details class="card profile-disclosure">
+        <summary>教育信息<span>{{ p.edu || '学历、学校、专业' }}</span></summary>
       <div class="field">
         <label>你的学历<Tag k="edu" /></label>
-        <p class="tip">点一下选中，再点一下取消。</p>
         <div class="chips">
           <button v-for="e in EDUS" :key="e" class="chip" :class="{ on: p.edu === e }"
             @click="p.edu = e">{{ e }}</button>
@@ -160,6 +167,9 @@
           placeholder="例如：2021-06" />
       </div>
 
+      </details>
+      <details class="card profile-disclosure">
+        <summary>联系方式与身体信息<span>按招聘要求补充</span></summary>
       <!-- 国聘「基本信息」段必填，不填就永远卡在保存那一步（2026-09-20 实测） -->
       <div class="field">
         <label for="f9">身高（cm）<Tag k="height" /></label>
@@ -190,13 +200,14 @@
           placeholder="例如：湖北省武汉市硚口区某某路 1 号" />
       </div>
 
+      </details>
+      <details class="card profile-disclosure">
+        <summary>招聘补充信息<span>民族、学位、语言等</span></summary>
       <!-- ====== 投国企要用的几项：只有本人知道，AI 不替他猜 ====== -->
       <div class="field">
         <label>下面这几项，只有你本人知道</label>
         <p class="tip">
-          国聘投递的「基本信息」「教育经历」「语言能力」会让你填这些。以前我按最常见的
-          答案默认填上（汉族 / 未婚 / 统招 / 全日制 / 英语熟练 / 服从调剂），那等于替你
-          编材料 —— 现在你不填，我就留空并在投递前提醒你补，绝不猜。
+          按本人实际情况填写。暂时不填也可以，投递前会提醒你补充。
         </p>
       </div>
 
@@ -215,8 +226,7 @@
 
       <div class="field">
         <label>学历性质<Tag k="edu_regular" /></label>
-        <p class="tip">成人教育、自考、函授、网络教育要选「非统招」——
-          这项填错就是学历性质造假，所以只能你自己确认。</p>
+        <p class="tip">成人教育、自考、函授、网络教育请选择「非统招」。</p>
         <div class="chips">
           <button v-for="o in EDU_REGULARS" :key="o.v" class="chip"
             :class="{ on: p.edu_regular === o.v }" @click="p.edu_regular = o.v">{{ o.v }}</button>
@@ -250,8 +260,7 @@
           <button v-for="v in FOREIGN_LEVELS" :key="v" class="chip"
             :class="{ on: p.foreign_level === v }" @click="p.foreign_level = v">{{ v }}</button>
         </div>
-        <p class="tip">不会外语就选「不会外语」。以前这里默认填「英语 · 熟练」，
-          等于凭空给你安一门技能，面试一问英文就穿帮。</p>
+        <p class="tip">请按实际水平选择，不会外语也可以。</p>
       </div>
 
       <div class="field">
@@ -272,13 +281,16 @@
         </div>
       </div>
 
+      </details>
+    </div>
+
+    <div v-show="panel === 'skills'" class="card">
+      <h2 class="card-title">工作与学习经历</h2>
       <!-- ============ 结构化经历：投国聘时直接补进它的站内简历 ============ -->
       <div class="field">
         <label>你的经历（工作 / 实习 / 校内活动 / 教育）<Tag k="experiences" /></label>
         <p class="tip">
-          有几段写几段，不填也能投。填了的用处很实在：国聘投递时要求补全它站内简历，
-          我能把这段真实经历直接填进去，不用勾「无工作经历」——单位看到的是加分项。
-          传了简历的，工作经历我会照着认出来，你核对一下就行。
+          有几段写几段；上传简历后读到的经历，也可以在这里核对。
         </p>
         <div v-for="(e, i) in expList" :key="'exp' + i" class="exp-card">
           <div class="exp-head">
@@ -318,7 +330,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div v-show="panel === 'skills'" class="card">
       <div class="card-head">
         <span class="tile tile-cyan" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -330,9 +342,10 @@
       </div>
       <p class="card-hint">会的都点上，点得越多，找得越准。没有合适的可以跳过。</p>
       <div class="chips">
-        <button v-for="s in SKILLS" :key="s" class="chip" :class="{ on: p.skills.includes(s) }"
+        <button v-for="s in visibleSkills" :key="s" class="chip" :class="{ on: p.skills.includes(s) }"
           @click="toggle(p.skills, s)">{{ s }}</button>
       </div>
+      <button class="text-link expand-options" :aria-expanded="allSkills" @click="allSkills = !allSkills">{{ allSkills ? '收起更多技能' : '展开全部技能' }}</button>
 
       <div class="field" style="margin-top:1.3rem;">
         <label for="f14">还想说说什么（可以不填）<Tag k="intro" /></label>
@@ -358,7 +371,7 @@
 </template>
 
 <script setup>
-import { h, ref, watch, onUnmounted } from 'vue'
+import { h, ref, computed, watch, onUnmounted, toRefs, nextTick } from 'vue'
 import { store, toggle } from '../store'
 import { CITIES, EDUS, EXPS, SKILLS, MARITALS, EDU_REGULARS, EDU_FORMS,
   DEGREE_OPTIONS, FOREIGN_LANGS, FOREIGN_LEVELS, ARRANGE_OPTIONS,
@@ -368,6 +381,13 @@ import { canRecord, record, stopRecord } from '../useSpeech'
 
 const p = store.profile
 const canRec = canRecord()
+const panel = computed({ get: () => store.profilePanel, set: value => { store.profilePanel = value } })
+async function editBasic() {
+  await nextTick()
+  document.getElementById('f1')?.focus()
+}
+const allSkills = ref(false)
+const visibleSkills = computed(() => allSkills.value ? SKILLS : SKILLS.filter((s, i) => i < 8 || p.skills.includes(s)))
 
 // ============ 结构化经历编辑器 ============
 // 注意：这个会话没动过编辑器时，不把 experiences 发回后端（App.vue 负责摘掉），
@@ -392,9 +412,7 @@ const keepResume = ref(true)   // 留着原件，自动投才能上传真正的�
 const msg = ref('')
 const err = ref('')
 const isWarn = ref(false)   // 这句话是提醒（不是简历），不是「读好了」
-const got = ref([])        // [{key,label,value}]
-const low = ref([])        // 需要用户核对一下的字段
-const filled = ref([])     // 哪些字段是从简历来的（用来在标签后面挂个小标记）
+const { got, low, filled, resumeName, parsedAt } = toRefs(store.resumeReview)
 
 const MAX_MB = 5
 
@@ -431,6 +449,7 @@ async function onPick(e) {
   got.value = []
   low.value = []
   filled.value = []
+  resumeName.value = ''
 
   if (f.size > MAX_MB * 1024 * 1024) {
     err.value = '这个文件太大了（超过 ' + MAX_MB + ' MB）。可以只留前面一两页再传。'
@@ -454,6 +473,8 @@ async function onPick(e) {
     got.value = r.got || []
     low.value = r.low || []
     isWarn.value = !!r.warn
+    resumeName.value = r.warn ? '' : f.name
+    parsedAt.value = new Date().toLocaleString('zh-CN', { hour12: false })
     msg.value = (r.msg || '读好了，看看下面填得对不对。') +
       (r.resume_path ? '　原件也留好了，自动投时就用它。' : '')
   } catch (e) {

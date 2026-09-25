@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="wish-grid">
     <div class="card">
       <div class="card-head">
         <span class="tile" aria-hidden="true">
@@ -52,14 +52,44 @@
         </span>
         <h2 class="card-title">想做什么工作<span class="soft">可多选</span></h2>
       </div>
+      <p class="job-section-label">先选工作大类<span class="soft">不限细分，可多选</span></p>
       <div class="chips">
         <button v-for="t in JOB_TYPES" :key="t" class="chip" :class="{ on: p.jobTypes.includes(t) }"
-          @click="toggle(p.jobTypes, t)">{{ t }}</button>
+          :aria-pressed="p.jobTypes.includes(t)" @click="toggle(p.jobTypes, t)">{{ t }}</button>
+      </div>
+      <p class="job-section-label">或者选具体职位</p>
+      <p class="card-hint">点击分类，在这一排下方展开；切换分类不会清除已选职位。</p>
+      <div v-for="(row, rowIndex) in groupRows" :key="rowIndex" class="job-group-row">
+        <div class="job-group-grid">
+          <button v-for="group in row" :key="group.name" class="job-group-button"
+            :class="{ active: activeGroup === group.name }" :aria-expanded="activeGroup === group.name"
+            :aria-controls="'job-group-panel-' + rowIndex" @click="activeGroup = activeGroup === group.name ? '' : group.name">
+            {{ group.name }}
+            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m4 6 4 4 4-4" /></svg>
+          </button>
+        </div>
+        <div v-if="row.some(group => group.name === activeGroup)" :id="'job-group-panel-' + rowIndex"
+          class="job-group-panel" role="region" :aria-label="activeGroup + '具体职位'">
+          <p class="card-hint">{{ activeGroup }} · 可多选</p>
+          <div class="chips">
+            <button v-for="t in activeJobs" :key="t" class="chip" :class="{ on: p.jobTypes.includes(t) }"
+              :aria-pressed="p.jobTypes.includes(t)" @click="toggle(p.jobTypes, t)">{{ t }}</button>
+          </div>
+        </div>
+      </div>
+      <div v-if="p.jobTypes.length" class="chosen-jobs">
+        <p class="card-hint">已选职位（点击可取消）</p>
+        <div class="chips">
+          <button v-for="t in p.jobTypes" :key="t" class="chip on" :aria-label="'取消选择' + t"
+            @click="toggle(p.jobTypes, t)">{{ t }}</button>
+        </div>
       </div>
       <div class="field compact-field">
         <label for="f15">上面没有？自己填关键词</label>
         <input id="f15" class="input input-search" v-model="p.keyword"
-          placeholder="请输入职位关键词，例如：工程师、策划、助理等" />
+          aria-describedby="job-keyword-help" placeholder="例如：托管老师、会计、仓库管理员" />
+        <p id="job-keyword-help" class="card-hint">多个职位用顿号或逗号隔开，会与已选职位一起搜索。托管老师也会匹配午托、晚托、课后托管等相关叫法。</p>
+        <p class="card-hint">找托管机构的工作时，建议保留“民营”；实际结果还取决于城市和招聘来源是否收录。</p>
       </div>
     </div>
 
@@ -75,9 +105,10 @@
         <h2 class="card-title">城市<span class="soft">选一个</span></h2>
       </div>
       <div class="chips">
-        <button v-for="c in CITIES" :key="c" class="chip" :class="{ on: p.city === c }"
-          @click="p.city = c">{{ c }}</button>
+        <button v-for="c in visibleCities" :key="c" class="chip" :class="{ on: p.city === c && !p.cityOther }"
+          @click="p.city = c; p.cityOther = ''">{{ c }}</button>
       </div>
+      <button class="text-link expand-options" :aria-expanded="allCities" @click="allCities = !allCities">{{ allCities ? '收起更多城市' : '更多城市' }}</button>
       <div class="field compact-field">
         <label for="f16">其他城市</label>
         <input id="f16" class="input" v-model="p.cityOther" placeholder="例如：无锡" />
@@ -113,10 +144,16 @@
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
 import { store, toggle } from '../store'
-import { NATURES, JOB_TYPES, CITIES, SALARIES, HIRE_TYPES } from '../options'
+import { NATURES, JOB_TYPES, JOB_GROUPS, CITIES, SALARIES, HIRE_TYPES } from '../options'
 
 const p = store.profile
+const activeGroup = ref('')
+const groupRows = Array.from({ length: Math.ceil(JOB_GROUPS.length / 4) }, (_, i) => JOB_GROUPS.slice(i * 4, i * 4 + 4))
+const activeJobs = computed(() => JOB_GROUPS.find(group => group.name === activeGroup.value)?.jobs || [])
+const allCities = ref(false)
+const visibleCities = computed(() => allCities.value ? CITIES : CITIES.filter((c, i) => i < 8 || p.city === c))
 
 function selectAllNature() {
   p.nature.splice(0, p.nature.length, ...NATURES.map(n => n.v))

@@ -1516,3 +1516,104 @@ textarea.input {
     font-size: .84rem;
   }
 }
+
+/* Four-step task layout: show required content first, reveal optional details on demand. */
+.topbar-in { padding-block: 1rem; }
+.topbar .sub { font-size: .88rem; }
+.hero-doc, .hero-lens { display: none; }
+.section-tabs {
+  display: flex;
+  gap: .25rem;
+  padding: .25rem;
+  border-radius: .7rem;
+  background: #e3ecf8;
+}
+.section-tabs button {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.65rem;
+  border: 0;
+  border-radius: .5rem;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-weight: 600;
+  padding: .35rem .2rem;
+}
+.section-tabs button.active { background: var(--surface); color: var(--primary-7); }
+.section-tabs button:active { background: var(--primary-1); }
+.section-help { font-size: .88rem; color: var(--ink-2); margin: .6rem .1rem .8rem; }
+.profile-page .card { box-shadow: none; }
+.profile-page .card-title { font-size: 1.16rem; }
+.profile-page .basic-card .field { margin-bottom: .75rem; }
+.profile-page .basic-card .field:last-child { margin-bottom: 0; }
+.profile-page .basic-card .tip { margin: .5rem 0 0; }
+.profile-page .upload-card { padding-block: .8rem; }
+.profile-page .up-box { padding: 0; border: 0; background: transparent; margin: 0; }
+.profile-page .up-btn { min-height: 3.6rem; border-style: dashed; background: var(--surface-2); }
+.profile-page .up-keep { margin-top: .55rem; font-size: .85rem; font-weight: 400; }
+.profile-page .upload-card .card-hint { margin-bottom: .6rem; }
+.profile-disclosure > summary, .match-explanation > summary {
+  cursor: pointer;
+  min-height: 2.5rem;
+  font-weight: 700;
+  color: var(--ink);
+  padding-block: .35rem;
+}
+.profile-disclosure > summary span {
+  display: block;
+  font-size: .85rem;
+  font-weight: 400;
+  color: var(--ink-2);
+  margin-left: 1.1rem;
+}
+.profile-disclosure[open] > summary { margin-bottom: .8rem; border-bottom: 1px solid var(--line); padding-bottom: .8rem; }
+.profile-disclosure .field:last-child { margin-bottom: 0; }
+.expand-options { display: block; margin: .25rem 0 0; }
+.nav-error { margin: 0; color: var(--danger-7); font-size: .92rem; }
+.navbar > * { width: 100%; max-width: 44rem; margin-inline: auto; }
+.match-toolbar .card-hint { margin-bottom: .65rem; }
+.match-explanation { font-size: .9rem; margin-top: .4rem; }
+.match-explanation .source-bar { margin-top: .5rem; }
+.apply-overview { background: transparent; border: 0; box-shadow: none; padding: 0; }
+.apply-overview .group { background: var(--surface); box-shadow: none; border-radius: .8rem; }
+.apply-overview .card-head { flex-wrap: wrap; }
+.apply-overview .group-title { flex: 1; min-width: 6rem; }
+.input { caret-color: var(--primary-7); }
+.input::placeholder { color: #64748b; }
+::selection { background: #c9e2ff; color: #123c71; }
+@media (min-width: 760px) {
+  .profile-page { display: grid; grid-template-columns: 1fr 1.2fr; gap: 0 1rem; align-items: start; }
+  .profile-page > .section-tabs, .profile-page > .section-help,
+  .profile-page > .profile-more, .profile-page > details { grid-column: 1 / -1; }
+  .wish-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+  .wish-grid > .card { margin-bottom: 0; min-width: 0; }
+}
+@media (max-width: 480px) {
+  .topbar-in { flex-direction: row; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .85rem .8rem; }
+  .topbar-in > div:first-child { flex: 1 1 10rem; }
+  .topbar h1 { font-size: 1.45rem; }
+  .topbar .sub { font-size: .85rem; max-width: 14rem; }
+  .topbar-actions { gap: .35rem; margin-left: auto; }
+  .btn-hero { padding-inline: .55rem; font-size: .85rem; min-height: 2.45rem; }
+  .font-switch { min-width: 4.1rem; gap: .35rem; }
+  .shell { padding-inline: .7rem; }
+  .stepbar { margin-block: .8rem; }
+  .profile-page .card { padding: .8rem; margin-bottom: .7rem; }
+  .profile-page .tile { width: 1.9rem; height: 1.9rem; }
+  .profile-page .card-title .soft { display: inline; font-size: .8rem; }
+  .profile-page .input { min-height: 2.75rem; padding-block: .45rem; font-size: 1rem; }
+  .profile-page .field > label { font-size: 1rem; margin-bottom: .3rem; }
+  .profile-page .mic-btn { min-height: 2.75rem; }
+  .section-tabs button { font-size: .92rem; }
+  .wish-grid .card-head { flex-wrap: wrap; }
+  .wish-grid .text-link { max-width: none; text-align: left; }
+  .match-toolbar .csearch { margin-block: .5rem; }
+  .match-toolbar .csearch-row { flex-wrap: nowrap; }
+  .match-toolbar .csearch-row .input { min-width: 0; flex: 1 1 0; }
+  .match-toolbar .csearch-row .btn { width: auto; flex: 0 0 auto; padding-inline: .75rem; }
+  .match-toolbar > .chips .chip { min-width: 0; padding-inline: .7rem; font-size: .92rem; }
+  .match-toolbar .chips { gap: .4rem; }
+  .pref { font-size: .82rem; padding-block: .35rem; }
+  .pref-t { display: none; }
+}

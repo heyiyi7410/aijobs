@@ -1,7 +1,7 @@
 <template>
   <div>
-    <div class="card">
-      <div class="card-head">
+    <div class="card match-toolbar">
+      <div class="card-head sr-only">
         <span class="tile" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -10,22 +10,21 @@
             <path d="M3 12.5h18" />
           </svg>
         </span>
-        <h2 class="card-title">这些单位和岗位适合你</h2>
+        <h2 class="card-title">挑选适合你的岗位</h2>
       </div>
-      <p class="card-hint">
-        已经按适合程度排好队了，最上面最合适。点圆圈选中要投的，选好了点下面「去投递」。<br />
-        标着<span class="badge badge-mail">可代投</span>的岗位公告里留了报名邮箱，下一步能替你一键把简历发过去；
-        没有这个标记的只能到它自己的招聘网站上投。
+      <p class="card-hint sr-only">
+        按匹配度排序，点圆圈选中，再点「去投递」。
       </p>
 
       <div class="csearch">
-        <label class="csearch-label">想去哪家单位？直接搜它的名字</label>
+        <label for="company-search" class="sr-only">按单位名搜索</label>
         <div class="csearch-row">
           <input
+            id="company-search"
             class="input input-search"
             v-model="q"
             @keyup.enter="doSearch"
-            placeholder="按单位名搜索，例如：武钢、中建三局"
+            placeholder="按单位名搜索，例如：武钢"
           />
           <button class="btn btn-primary" :disabled="store.companySearching" @click="doSearch">
             {{ store.companySearching ? '正在搜…' : '搜索' }}
@@ -42,12 +41,12 @@
         </div>
       </div>
 
-      <div class="chips" style="margin-bottom:1rem;">
-        <button v-if="outCount" class="chip" :class="{ on: store.scope === 'local' }"
+      <div class="chips match-filters">
+        <button v-if="outCount" class="chip scope-filter" :class="{ on: store.scope === 'local' }"
           @click="setScope('local')">
           本市（{{ localCount }}）
         </button>
-        <button v-if="outCount" class="chip" :class="{ on: store.scope === 'all' }"
+        <button v-if="outCount" class="chip scope-filter" :class="{ on: store.scope === 'all' }"
           @click="setScope('all')">
           外地（{{ outCount }}）
         </button>
@@ -61,11 +60,15 @@
           @click="store.filter = 'mail'">
           能代投
         </button>
-        <button v-if="shown.length" class="chip" :class="{ on: allPicked }" @click="togglePickAll">
-          {{ allPicked ? '取消全选' : '全选' }}
-        </button>
       </div>
+      <div v-if="shown.length" class="pick-actions">
+        <button @click="pickVisible" :disabled="allPicked"><span class="pick-check" aria-hidden="true"></span>全选</button>
+        <button @click="clearVisible" :disabled="!shown.some(j => store.picked.includes(j.key))"><span class="pick-minus" aria-hidden="true"></span>取消全选</button>
+      </div>
+      <p class="match-source-note">岗位按匹配度排序，请核对报名时间与要求再投递。</p>
 
+      <details v-if="sourceLine || relaxed || wideCount || droppedClosed" class="match-explanation">
+        <summary>岗位来源与筛选说明</summary>
       <div v-if="sourceLine" class="source-bar">
         <span class="src-dot"></span>{{ sourceLine }}
       </div>
@@ -85,6 +88,7 @@
         已经替你剔掉 <b>{{ droppedClosed }}</b> 个投不了的岗位
         （报名还没开始或已截止）——下面这些都是现在能报的。
       </p>
+      </details>
       <p v-if="usedFallback" class="relax-tip info-warn">
         暂时连不上招聘网站，下面先显示的是内置示例岗位，投递前请再确认一下。
       </p>
@@ -105,9 +109,9 @@
           {{ store.companyFilter ? '没找到「' + store.companyFilter + '」这家单位的岗位。' : '这个条件下没找到能投的岗位。' }}
         </p>
         <p class="muted">
-          <template v-if="droppedClosed">系统已经替你剔掉了 <b>{{ droppedClosed }}</b> 个报名还没开始或已经截止的岗位，剩下的现在是真的没有正在招人的。</template>
-          <template v-else>国企、央企招聘都有报名窗口，没到时间或已经截止的都投不了，所以会出现这种「搜到了但能投的是 0 个」的情况。</template>
-          可以回到上一步把城市去掉、多选几类工作，或者换个意向再搜。
+          <template v-if="droppedClosed">已剔除 <b>{{ droppedClosed }}</b> 个尚未开始或已经截止的岗位。</template>
+          当前招聘来源暂未返回符合条件的可投岗位，不代表这个职位没有招聘。
+          可以回到上一步换一个相关职位名称、调整城市或单位性质。找托管老师等机构岗位时，请检查是否勾选“民营”。
         </p>
       </template>
     </div>
@@ -121,12 +125,17 @@
         :class="{ picked: store.picked.includes(j.key) }"
         @click="toggle(store.picked, j.key)"
       >
-        <button class="job-pick" aria-hidden="true" tabindex="-1"></button>
+        <button class="job-pick" :aria-label="'选择岗位：' + j.title" :aria-pressed="store.picked.includes(j.key)"
+          @click.stop="toggle(store.picked, j.key)"></button>
         <div class="job-main">
           <!-- 右上角评分块（效果图：86 分/很适合） -->
           <div class="job-top">
+            <div class="job-heading">
             <h3 class="job-title">
               {{ j.title }}
+            </h3>
+            <p class="job-company">{{ j.company }}</p>
+            <div class="job-badges">
               <span class="badge" :class="badgeClass(j.nature)">{{ j.nature }}</span>
               <span v-if="j.hire_type === '劳务派遣'" class="badge badge-warn">劳务派遣</span>
               <span v-else class="badge badge-other">直签</span>
@@ -142,28 +151,29 @@
               <span v-if="j.city_scope === 'national'" class="badge badge-other">全国招聘</span>
               <span v-else-if="j.city_scope === 'province'" class="badge badge-other">本省</span>
               <span v-if="j.nearby" class="badge badge-other">外地</span>
-            </h3>
+            </div>
+            </div>
             <div class="job-score" :class="scoreClass(j.score)"
               :aria-label="'适合程度 ' + j.score + ' 分，' + j.level">
               <b>{{ j.score }}<i>分</i></b>
               <span class="lvl">{{ j.level }}</span>
             </div>
           </div>
-          <p class="job-company">{{ j.company }} · {{ j.city }}{{ j.district }}</p>
-          <p v-if="j.deadline" class="job-line"><span class="k">截止：</span>{{ j.deadline }}</p>
-          <p v-if="j.headcount || j.recruit_type" class="job-line">
-            <span class="k">招聘：</span>{{ j.recruit_type || '社会招聘' }}<template v-if="j.headcount"> · 招 {{ j.headcount }} 人</template>
-          </p>
-
-          <p class="job-line"><span class="k">工资：</span><b>{{ j.salary_text }}</b></p>
-          <p class="job-line"><span class="k">要求：</span>{{ j.exp }} / {{ j.edu }}</p>
-
           <!-- 适合原因：浅蓝面板（效果图）；前面的勾由 SVG 画（禁 emoji/字符当图标） -->
           <div v-if="j.reasons && j.reasons.length" class="job-why">
             <p class="job-why-t">适合原因</p>
             <p v-for="r in j.reasons" :key="r" class="reason">{{ r }}</p>
           </div>
           <p v-for="t in j.tips" :key="t" class="tip-line">{{ t }}</p>
+          <div class="job-facts">
+            <p v-if="j.apply_start || j.deadline"><span>报名时间</span>{{ j.apply_start || '已开始' }} — {{ j.deadline || '见公告' }}</p>
+            <p v-if="j.hr_email"><span>投递邮箱</span>{{ j.hr_email }}</p>
+            <p v-if="j.headcount"><span>招聘人数</span>{{ j.headcount }} 人</p>
+            <p v-if="j.hr_phone"><span>联系电话</span>{{ j.hr_phone }}</p>
+            <p><span>工作地点</span>{{ j.city }}{{ j.district }}</p>
+            <p><span>薪资待遇</span><b>{{ j.salary_text }}</b></p>
+            <p><span>岗位要求</span>{{ j.exp }} / {{ j.edu }}</p>
+          </div>
 
           <!-- 详情：展开看岗位职责/公告摘要、报名时间、原文链接 -->
           <button class="detail-btn" @click.stop="toggleDetail(j)">
@@ -301,6 +311,13 @@ const shown = computed(() => {
 const allPicked = computed(() =>
   shown.value.length > 0 && shown.value.every(j => store.picked.includes(j.key))
 )
+function pickVisible() {
+  store.picked = [...new Set([...store.picked, ...shown.value.map(j => j.key)])]
+}
+function clearVisible() {
+  const keys = new Set(shown.value.map(j => j.key))
+  store.picked = store.picked.filter(key => !keys.has(key))
+}
 
 function togglePickAll() {
   const keys = shown.value.map(j => j.key)
