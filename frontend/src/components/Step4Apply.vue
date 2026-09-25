@@ -7,7 +7,7 @@
          代投按钮只对能代投那组生效、并且在按钮上写明是几个；
          没邮箱的那组明确告诉用户「只能去官网投」，并提供逐个投递 + 自动填表。
          屏幕上看不见的岗位不该被投出去，也不该被悄悄跳过。 -->
-    <div v-if="mode === 'idle'" class="card apply-overview">
+    <div v-if="mode === 'idle' && !busy" class="card apply-overview">
       <!-- 发件邮箱的入口摆在标题这一行，谁都看得见。
            之前它藏在「能代投」那一组里、而且只在没配过邮箱时才渲染 ——
            库里 2749 个岗位只有 14 个有报名邮箱，所以大多数时候那一组压根不出现，
@@ -380,7 +380,7 @@
       </div>
     </div>
 
-    <div v-if="mode === 'idle'" class="step4-footer" aria-label="投递操作">
+    <div v-if="mode === 'idle' && !busy" class="step4-footer" aria-label="投递操作">
       <button class="btn" @click="go(3)">上一步</button>
       <button v-if="mailJobs.length" class="btn btn-primary"
         :disabled="busy" @click="mailReady ? sendAll() : openSetup()">
