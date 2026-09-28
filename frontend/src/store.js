@@ -53,8 +53,12 @@ export const store = reactive({
     // 就不用勾「无经历」）。type: edu | intern | campus
     experiences: [],
     // 用户同意保留的简历原件路径（后端存好后回传），自动投上传附件时用它
-    resume_path: ''
+    resume_path: '',
+    // 简历原件「原名」，登录后回填展示「已保存的简历：xxx.pdf」
+    resume_name: ''
   },
+  // 登录态：用户名 + 密码。token 单独存一份（AUTH_KEY），不清进度也能单独退出。
+  auth: { loggedIn: false, username: '', token: '' },
   profileId: null,
   // 用户这次会话有没有真的动过经历编辑器。没动过时保存档案不带 experiences，
   // 否则会把库里已有的经历（上次填的实习/社团）当成空数组覆盖掉（2026-09-20 实测踩坑）
@@ -150,7 +154,7 @@ export function pickedCount() {
 const PERSIST_KEY = 'zhaojobs.state.v1'
 
 // 正在跑的状态不落盘：恢复出来是假的「忙」，反而把人卡住
-const NOT_PERSISTED = ['loading', 'err', 'task', 'applying', 'companySearching']
+const NOT_PERSISTED = ['loading', 'err', 'task', 'applying', 'companySearching', 'auth']
 
 // 岗位列表可能很长（放宽城市时几百条），localStorage 只有 5M 左右。
 // 超过这个量就只存挑中的岗位 key，列表重载后重新匹配一次即可。
@@ -215,6 +219,110 @@ export function clearStore() {
   try {
     localStorage.removeItem(PERSIST_KEY)
   } catch (e) { /* 同上，清不掉也不影响继续用 */ }
+}
+
+/* ==========================================================================
+   登录态（用户名 + 密码）：单独存一份，跟「填的进度」分开。
+   ------------------------------------------------------------------------
+   为什么分开：登录态是账号维度的，进度是这次会话的。清进度（「清空重填」）
+   不该把人登出；退出登录也不该丢掉他填到一半的简历。两者各自 localStorage。
+   token 走 Authorization 头传给后端，简历状态就归属到账号，换设备登录能恢复。
+   ========================================================================== */
+
+const AUTH_KEY = 'zhaojobs.auth.v1'
+
+/** 拿请求头里要带的 Authorization。没登录返回空对象，api.req 直接展开。 */
+export function getAuthHeader() {
+  const t = store.auth.token
+  return t ? { Authorization: 'Bearer ' + t } : {}
+}
+
+/** 启动时把上次存的 token 填回 store。返回是否处于登录态（只给界面判断用）。 */
+export function restoreAuth() {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY)
+    if (!raw) return { loggedIn: false }
+    const o = JSON.parse(raw)
+    if (o && o.token) {
+      store.auth.token = o.token
+      store.auth.username = o.username || ''
+      store.auth.loggedIn = true
+      return { loggedIn: true }
+    }
+  } catch (e) { /* 坏了就当没登录 */ }
+  return { loggedIn: false }
+}
+
+export function setAuth(token, username) {
+  store.auth.token = token
+  store.auth.username = username || ''
+  store.auth.loggedIn = true
+  try {
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ token, username: store.auth.username }))
+  } catch (e) { /* 隐私模式存不进：本次会话内仍算登录，只是刷新后要重登 */ }
+}
+
+export function clearAuth() {
+  store.auth.token = ''
+  store.auth.username = ''
+  store.auth.loggedIn = false
+  try { localStorage.removeItem(AUTH_KEY) } catch (e) {}
+}
+
+/** 把服务端档案填回 store：登录后调一次，简历状态就接上了，不必重传。
+ *  只覆盖「服务端有值」的字段，绝不用空值冲掉用户本地已填的内容。 */
+export function applyServerProfile(sp) {
+  if (!sp) return
+  const p = store.profile
+  const str = (col) => (sp[col] != null && sp[col] !== '' ? sp[col] : null)
+  const set = (key, val) => { if (val != null) p[key] = val }
+
+  set('name', str('name'))
+  set('phone', str('phone'))
+  set('email', str('email'))
+  set('age', str('age'))
+  set('city', str('city'))
+  set('salary', str('salary'))
+  set('exp', str('exp'))
+  set('edu', str('edu'))
+  set('intro', str('intro'))
+  set('gender', str('gender'))
+  set('birth', str('birth'))
+  set('school', str('school'))
+  set('major', str('major'))
+  set('graduation', str('graduation'))
+  set('height', str('height'))
+  set('weight', str('weight'))
+  set('emergency_name', str('emergency_name'))
+  set('emergency_phone', str('emergency_phone'))
+  set('address', str('address'))
+  set('party_join_date', str('party_join_date'))
+  set('nation', str('nation'))
+  set('marital', str('marital'))
+  set('edu_regular', str('edu_regular'))
+  set('edu_fulltime', str('edu_fulltime'))
+  set('has_degree', str('has_degree'))
+  set('foreign_lang', str('foreign_lang'))
+  set('foreign_level', str('foreign_level'))
+  set('can_arrange', str('can_arrange'))
+  set('health', str('health'))
+  // 简历原件链接 + 原名：这就是「换设备登录还能接着用」的关键
+  set('resume_path', str('resume_path'))
+  set('resume_name', str('resume_name'))
+
+  // 逗号分隔的字段还原成数组
+  if (sp.job_types) p.jobTypes = String(sp.job_types).split(',').filter(Boolean)
+  if (sp.skills) p.skills = String(sp.skills).split(',').filter(Boolean)
+
+  // 经历是 JSON 字符串，还原成数组（丢了或格式坏就不动本地）
+  if (sp.experiences) {
+    try {
+      const e = typeof sp.experiences === 'string' ? JSON.parse(sp.experiences) : sp.experiences
+      if (Array.isArray(e)) { p.experiences = e; store.experiencesTouched = true }
+    } catch (e) { /* 忽略坏数据 */ }
+  }
+
+  store.profileId = sp.id
 }
 
 /* 真正的存档时机：任何改动后 400ms 写一次。

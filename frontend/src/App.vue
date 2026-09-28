@@ -10,6 +10,11 @@
         <p class="sub">帮您准备简历、筛选合适的单位和岗位<br />一步一步完成投递，找工作更轻松</p>
       </div>
       <div class="topbar-actions">
+        <template v-if="store.auth.loggedIn">
+          <span class="auth-user" :title="'已登录账号'">{{ store.auth.username }}</span>
+          <button class="btn-hero" @click="doLogout">退出</button>
+        </template>
+        <button v-else class="btn-hero" @click="showAuth = true">登录 / 注册</button>
         <button class="btn-hero font-switch" @click="toggleFont" :aria-pressed="store.bigFont"
           :aria-label="store.bigFont ? '切换为标准字号' : '切换为大字号'">
           <span>A-</span><i aria-hidden="true"></i><span>A+</span>
@@ -72,18 +77,41 @@
         </button>
       </div>
     </nav>
+
+    <!-- 登录 / 注册弹窗 -->
+    <div v-if="showAuth" class="auth-mask" @click.self="showAuth = false">
+      <div class="auth-card" role="dialog" aria-modal="true">
+        <div class="auth-tabs">
+          <button :class="{ on: authTab === 'login' }" @click="authTab = 'login'">登录</button>
+          <button :class="{ on: authTab === 'register' }" @click="authTab = 'register'">注册</button>
+        </div>
+        <h3>{{ authTab === 'login' ? '登录账号' : '注册账号' }}</h3>
+        <p class="auth-tip">登录后简历状态会保存到账号，换手机、清缓存再回来登录，也能接着用，不必每次重传简历。</p>
+        <input class="input" v-model="authUser" placeholder="用户名" maxlength="32" />
+        <input class="input" type="password" v-model="authPass" placeholder="密码（至少 6 位）"
+               @keyup.enter="submitAuth" />
+        <p v-if="authErr" class="auth-err" role="alert">{{ authErr }}</p>
+        <button class="btn btn-primary auth-submit" :disabled="authBusy" @click="submitAuth">
+          {{ authBusy ? '处理中…' : (authTab === 'login' ? '登录' : '注册并登录') }}
+        </button>
+        <button class="text-link" @click="authTab = authTab === 'login' ? 'register' : 'login'">
+          {{ authTab === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
+        </button>
+      </div>
+    </div>
   </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch, onMounted } from 'vue'
 import StepBar from './components/StepBar.vue'
 import Step1Profile from './components/Step1Profile.vue'
 import Step2Wish from './components/Step2Wish.vue'
 import Step3Match from './components/Step3Match.vue'
 import Step4Apply from './components/Step4Apply.vue'
-import { store, go, profilePayload, effectiveCity, restored, clearStore } from './store'
+import { store, go, profilePayload, effectiveCity, restored, clearStore,
+         restoreAuth, setAuth, clearAuth, applyServerProfile } from './store'
 import { api } from './api'
 import { canSpeak, speak, stopSpeak } from './useSpeech'
 
@@ -108,6 +136,57 @@ function startOver() {
   clearStore()
   location.reload()
 }
+
+/* ==========================================================================
+   登录态：启动时若本地有 token，先问后端「我还登录着吗」，是就把服务端档案
+   填回来（含已保存的简历链接）。token 失效就静默登出，不影响继续使用。
+   ========================================================================== */
+const authRestored = restoreAuth()
+const showAuth = ref(false)
+const authTab = ref('login')          // login | register
+const authUser = ref('')
+const authPass = ref('')
+const authErr = ref('')
+const authBusy = ref(false)
+
+async function loadLoggedInProfile() {
+  try {
+    const me = await api.authMe()
+    if (!me.ok) { clearAuth(); return }
+    const prof = await api.loadProfile()
+    if (prof.ok && prof.profile) applyServerProfile(prof.profile)
+  } catch (e) { /* 连不上就当没登录，本地进度还在 */ }
+}
+
+async function submitAuth() {
+  authErr.value = ''
+  if (!authUser.value.trim()) return (authErr.value = '请填写用户名')
+  if (!authPass.value) return (authErr.value = '请填写密码')
+  authBusy.value = true
+  try {
+    const fn = authTab.value === 'login' ? api.authLogin : api.authRegister
+    const r = await fn(authUser.value.trim(), authPass.value)
+    if (!r.ok) { authErr.value = r.msg || '操作失败，请重试'; return }
+    setAuth(r.token, r.username)
+    showAuth.value = false
+    authPass.value = ''
+    // 登录后把服务端档案接回来：已保存的简历立刻显示，不必重传
+    await loadLoggedInProfile()
+  } catch (e) {
+    authErr.value = '连不上服务，请稍后再试'
+  } finally {
+    authBusy.value = false
+  }
+}
+
+async function doLogout() {
+  try { await api.authLogout() } catch (e) { /* 忽略 */ }
+  clearAuth()
+}
+
+onMounted(() => {
+  if (authRestored.loggedIn) loadLoggedInProfile()
+})
 
 const nextText = computed(() => ({ 1: '下一步：选单位', 2: '帮我找岗位', 3: '去投递' }[store.step]))
 
@@ -242,3 +321,42 @@ async function next() {
   }
 }
 </script>
+
+<style scoped>
+/* 顶栏登录态 */
+.topbar-actions { display: flex; align-items: center; gap: .5rem; }
+.auth-user {
+  font-size: .95rem; font-weight: 700; color: var(--primary-7);
+  background: var(--surface); border-radius: 1rem; padding: .35rem .8rem;
+  max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 登录/注册弹窗 */
+.auth-mask {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(20, 40, 80, .45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.auth-card {
+  width: 100%; max-width: 22rem;
+  background: var(--surface); border-radius: 1.1rem;
+  padding: 1.4rem 1.3rem 1.6rem;
+  box-shadow: 0 18px 50px rgba(20, 40, 80, .28);
+  border: 1px solid var(--line);
+}
+.auth-tabs { display: flex; gap: .4rem; margin-bottom: 1rem; }
+.auth-tabs button {
+  flex: 1; padding: .6rem 0; border: 1px solid var(--line);
+  background: var(--surface-2); border-radius: .7rem;
+  font-weight: 700; color: var(--ink-2); cursor: pointer;
+}
+.auth-tabs button.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+.auth-card h3 { margin: 0 0 .4rem; font-size: 1.25rem; }
+.auth-tip { font-size: .92rem; color: var(--ink-2); line-height: 1.6; margin: 0 0 1rem; }
+.auth-card .input { width: 100%; margin-bottom: .7rem; }
+.auth-err {
+  color: var(--danger); font-size: .92rem; margin: 0 0 .6rem;
+}
+.auth-submit { width: 100%; margin-bottom: .8rem; }
+.auth-card .text-link { display: block; text-align: center; }
+</style>

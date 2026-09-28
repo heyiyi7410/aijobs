@@ -17,7 +17,16 @@
       <div class="up-box">
         <input ref="fileEl" class="up-file" type="file"
                accept=".pdf,.docx,.txt,.md" @change="onPick">
-        <button class="up-btn" :disabled="busy" @click="fileEl.click()">
+
+        <!-- 已经存过简历：直接告诉用户，不必重传。点「重新上传」才覆盖 -->
+        <div v-if="p.resume_path" class="uploaded-file">
+          <span class="file-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6" /></svg></span>
+          <div><b>{{ p.resume_name || '已保存的简历' }}</b><small>已保存到你的账号 · 自动投直接用原件</small></div>
+          <button class="btn btn-mini" :disabled="busy" @click="fileEl.click()">重新上传</button>
+        </div>
+
+        <!-- 没存过才显示大上传按钮 -->
+        <button v-else class="up-btn" :disabled="busy" @click="fileEl.click()">
           <!-- 云朵上传图标：SVG 画，不用字符 -->
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -29,11 +38,6 @@
             <small>支持 PDF / Word / txt / md</small>
           </span>
         </button>
-        <div v-if="resumeName" class="uploaded-file">
-          <span class="file-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6" /></svg></span>
-          <div><b>{{ resumeName }}</b><small>已解析成功 · {{ parsedAt }}</small></div>
-          <button class="btn btn-mini" :disabled="busy" @click="fileEl.click()">重新上传</button>
-        </div>
 
         <label class="up-keep">
           <input type="checkbox" class="switch" v-model="keepResume">
@@ -412,7 +416,7 @@ const keepResume = ref(true)   // 留着原件，自动投才能上传真正的�
 const msg = ref('')
 const err = ref('')
 const isWarn = ref(false)   // 这句话是提醒（不是简历），不是「读好了」
-const { got, low, filled, resumeName, parsedAt } = toRefs(store.resumeReview)
+const { got, low, filled } = toRefs(store.resumeReview)
 
 const MAX_MB = 5
 
@@ -449,7 +453,6 @@ async function onPick(e) {
   got.value = []
   low.value = []
   filled.value = []
-  resumeName.value = ''
 
   if (f.size > MAX_MB * 1024 * 1024) {
     err.value = '这个文件太大了（超过 ' + MAX_MB + ' MB）。可以只留前面一两页再传。'
@@ -464,17 +467,21 @@ async function onPick(e) {
     })
     if (!r.ok) {
       // 读不出字段也可能保住了原件（比如扫描件），照样记下来，附件还能用
-      if (r.resume_path) p.resume_path = r.resume_path
+      if (r.resume_path) {
+        p.resume_path = r.resume_path
+        p.resume_name = r.resume_name || p.resume_name
+      }
       err.value = r.msg || '这份文件没能读出内容，下面手动填一下吧。'
       return
     }
     apply(r.fields || {})
-    if (r.resume_path) p.resume_path = r.resume_path
+    if (r.resume_path) {
+      p.resume_path = r.resume_path
+      p.resume_name = r.resume_name || f.name
+    }
     got.value = r.got || []
     low.value = r.low || []
     isWarn.value = !!r.warn
-    resumeName.value = r.warn ? '' : f.name
-    parsedAt.value = new Date().toLocaleString('zh-CN', { hour12: false })
     msg.value = (r.msg || '读好了，看看下面填得对不对。') +
       (r.resume_path ? '　原件也留好了，自动投时就用它。' : '')
   } catch (e) {

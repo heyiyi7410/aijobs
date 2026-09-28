@@ -6,8 +6,10 @@
   applications 投递记录
   jobs_cache   岗位缓存（可选）
 """
+import hashlib
 import json
 import os
+import secrets
 import sqlite3
 import threading
 import time
@@ -73,6 +75,23 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_city    ON jobs(city);
 CREATE INDEX IF NOT EXISTS idx_jobs_nature  ON jobs(nature);
 CREATE INDEX IF NOT EXISTS idx_jobs_fetched ON jobs(fetched_at);
+
+-- 账号体系：用户名 + 密码（标准注册，无需手机短信）。
+-- 简历状态绑定到账号，换设备/清缓存后登录即可恢复，不必每次重传。
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT UNIQUE,
+    password_hash TEXT,
+    salt          TEXT,
+    created_at    INTEGER
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token      TEXT PRIMARY KEY,
+    user_id    INTEGER,
+    created_at INTEGER,
+    expires_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 """
 
 # 老库升级：缺哪个字段补哪个
@@ -147,6 +166,12 @@ EXTRA_COLUMNS = [
     ('profiles', 'can_arrange', 'TEXT'),     # 是 / 否
     ('profiles', 'health', 'TEXT'),          # 健康状况：健康/良好/一般
     ('profiles', 'has_degree', 'TEXT'),      # 学位证：有学位证 / 无学位证
+    # 简历归属到登录账号：owner_id 非空 = 这份档案属于某个用户（按 owner_id 命中，
+    # 不按手机号，手机号改了也是同一份）；空 = 匿名档案（按手机号命中）。
+    ('profiles', 'owner_id', 'INTEGER'),
+    # 用户同意保留的简历原件「原名」（方便前端展示「已保存的简历：xxx.pdf」）。
+    # 真实的文件按时间戳存到 data/resumes/，路径记在 resume_path。
+    ('profiles', 'resume_name', 'TEXT'),
 ]
 
 
@@ -176,13 +201,22 @@ def _join(v):
     return '' if v is None else str(v)
 
 
-def save_profile(data):
-    """保存一份简历信息，返回 id。有同手机号则更新，避免重复建档。
+def save_profile(data, owner_id=None):
+    """保存一份简历信息，返回 id。
+
+    命中规则（优先级）：
+      owner_id 给定（已登录） → 按 owner_id 命中，账号名下只有一份档案，
+                                手机号改了也还是同一份，简历状态稳定可恢复；
+      否则按手机号命中（匿名） → 维持旧行为，未登录也能用。
 
     合并语义（多用户/部分更新安全）：以库里旧值为底，用本次 data 里「显式出现」
     的键覆盖；data 里没给的字段一律保留旧值，绝不用空串冲掉用户已填的数据。
     这样前端每次「下一步」只回传部分字段时，不会把用户之前填的实习经历、身高、
     入党时间等抹掉。experiences 是 JSON 数组，单独规整。
+
+    resume_path / resume_name 特殊处理：只有 data 里给了「非空」值才覆盖，
+    给空串或没给都保留旧值——避免本地清空了 resume_path 后把服务端已存的
+    简历原件链接也冲掉（那样用户登录后明明存过简历却显示要重传）。
     """
     conn = _conn()
     try:
@@ -193,7 +227,13 @@ def save_profile(data):
 
         # 旧值（按列名）；无匹配则空字典，走 INSERT
         old = {}
-        if phone:
+        if owner_id:
+            c = conn.execute('SELECT * FROM profiles WHERE owner_id=?', (owner_id,))
+            c.row_factory = sqlite3.Row
+            r0 = c.fetchone()
+            if r0:
+                old = dict(r0)
+        elif phone:
             c = conn.execute('SELECT * FROM profiles WHERE phone=?', (phone,))
             c.row_factory = sqlite3.Row
             r0 = c.fetchone()
@@ -205,6 +245,13 @@ def save_profile(data):
             if key in data:
                 val = data[key]
                 return transform(val) if transform else norm(val)
+            return old.get(key) or ''
+
+        # 简历原件链接：非空才覆盖（见函数 docstring）
+        def _pick(key):
+            val = data.get(key)
+            if val is not None and str(val).strip():
+                return norm(val)
             return old.get(key) or ''
 
         # experiences：list/tuple -> JSON；str 直接用；缺省沿用旧值
@@ -225,44 +272,65 @@ def save_profile(data):
         else:
             exp_out = old.get('experiences') or ''
 
-        row = (
-            v('name'), phone, v('email'), v('age'), v('city'),
-            _join(data.get('jobTypes')) if 'jobTypes' in data else (old.get('job_types') or ''),
-            v('salary'), v('exp'), v('edu'),
-            _join(data.get('skills')) if 'skills' in data else (old.get('skills') or ''),
-            v('intro'), v('gender'), v('birth'), v('school'), v('major'),
-            v('graduation'), v('resume_path'), v('height'), v('weight'),
-            v('emergency_name'), v('emergency_phone'), v('address'),
-            v('party_join_date'),
-            # 只有本人知道的个人事实（2026-09-21 补）：民族 / 婚姻 / 学历性质 /
-            # 学位证 / 外语 / 服从调剂 / 健康状况。autofill 以前把这些**写死**，
-            # 现在必须真存下来，否则投递时又只能靠猜。
-            v('nation'), v('marital'), v('edu_regular'), v('edu_fulltime'),
-            v('has_degree'), v('foreign_lang'), v('foreign_level'),
-            v('can_arrange'), v('health'),
-            exp_out, int(time.time()),
-        )
+        # 用一份清单同时驱动 INSERT / UPDATE：列数和取值永远对得上，
+        # 以后加字段只改这一处。owner_id 由 EXTRA_COLUMNS 升上来，也要写进去，
+        # 简历才真正归属到账号（换设备登录还能接着用）。
+        vals = {
+            'name': v('name'),
+            'phone': phone,
+            'email': v('email'),
+            'age': v('age'),
+            'city': v('city'),
+            'job_types': _join(data.get('jobTypes')) if 'jobTypes' in data else (old.get('job_types') or ''),
+            'salary': v('salary'),
+            'exp': v('exp'),
+            'edu': v('edu'),
+            'skills': _join(data.get('skills')) if 'skills' in data else (old.get('skills') or ''),
+            'intro': v('intro'),
+            'gender': v('gender'),
+            'birth': v('birth'),
+            'school': v('school'),
+            'major': v('major'),
+            'graduation': v('graduation'),
+            'resume_path': _pick('resume_path'),
+            'resume_name': _pick('resume_name'),
+            'height': v('height'),
+            'weight': v('weight'),
+            'emergency_name': v('emergency_name'),
+            'emergency_phone': v('emergency_phone'),
+            'address': v('address'),
+            'party_join_date': v('party_join_date'),
+            'nation': v('nation'),
+            'marital': v('marital'),
+            'edu_regular': v('edu_regular'),
+            'edu_fulltime': v('edu_fulltime'),
+            'has_degree': v('has_degree'),
+            'foreign_lang': v('foreign_lang'),
+            'foreign_level': v('foreign_level'),
+            'can_arrange': v('can_arrange'),
+            'health': v('health'),
+            'experiences': exp_out,
+            'owner_id': owner_id if owner_id else (old.get('owner_id') or ''),
+            'created_at': int(time.time()),
+        }
+        # 写入列顺序固定，INSERT 与 UPDATE 共用，杜绝列数对不齐
+        cols = ['name', 'phone', 'email', 'age', 'city', 'job_types', 'salary', 'exp', 'edu',
+                'skills', 'intro', 'gender', 'birth', 'school', 'major', 'graduation',
+                'resume_path', 'resume_name', 'height', 'weight',
+                'emergency_name', 'emergency_phone', 'address', 'party_join_date',
+                'nation', 'marital', 'edu_regular', 'edu_fulltime', 'has_degree',
+                'foreign_lang', 'foreign_level', 'can_arrange', 'health',
+                'experiences', 'owner_id', 'created_at']
+        row = tuple(vals[c] for c in cols)
+
         if old:
-            conn.execute(
-                'UPDATE profiles SET name=?,phone=?,email=?,age=?,city=?,job_types=?,salary=?,'
-                'exp=?,edu=?,skills=?,intro=?,gender=?,birth=?,school=?,major=?,graduation=?,'
-                'resume_path=?,height=?,weight=?,emergency_name=?,'
-                'emergency_phone=?,address=?,party_join_date=?,'
-                'nation=?,marital=?,edu_regular=?,edu_fulltime=?,has_degree=?,'
-                'foreign_lang=?,foreign_level=?,can_arrange=?,health=?,'
-                'experiences=?,created_at=? WHERE id=?',
-                row + (old['id'],))
+            sets = ','.join('%s=?' % c for c in cols)
+            conn.execute('UPDATE profiles SET %s WHERE id=?' % sets, row + (old['id'],))
             conn.commit()
             return old['id']
         cur = conn.execute(
-            'INSERT INTO profiles (name,phone,email,age,city,job_types,salary,exp,edu,skills,intro,'
-            'gender,birth,school,major,graduation,resume_path,height,weight,'
-            'emergency_name,emergency_phone,address,party_join_date,'
-            'nation,marital,edu_regular,edu_fulltime,has_degree,'
-            'foreign_lang,foreign_level,can_arrange,health,'
-            'experiences,created_at) '
-            'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'
-            '?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO profiles (%s) VALUES (%s)'
+            % (','.join(cols), ','.join(['?'] * len(cols))),
             row)
         conn.commit()
         return cur.lastrowid
@@ -277,6 +345,124 @@ def get_profile(profile_id):
         cur = conn.execute('SELECT * FROM profiles WHERE id=?', (profile_id,))
         r = cur.fetchone()
         return dict(r) if r else None
+    finally:
+        conn.close()
+
+
+def get_profile_for_user(owner_id):
+    """取某个登录账号名下的档案（一个账号一份）。没有返回 None。"""
+    if not owner_id:
+        return None
+    conn = _conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute(
+            'SELECT * FROM profiles WHERE owner_id=? ORDER BY id DESC LIMIT 1', (owner_id,))
+        r = cur.fetchone()
+        return dict(r) if r else None
+    finally:
+        conn.close()
+
+
+# ------------------------- 账号与登录态（用户名 + 密码） -------------------------
+# 无第三方依赖，密码用 pbkdf2_hmac 加盐哈希，token 用 secrets 生成。
+
+def _hash_password(password, salt):
+    return hashlib.pbkdf2_hmac(
+        'sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000).hex()
+
+
+def create_user(username, password):
+    """注册。成功返回 (user_id, None)，失败返回 (None, 错误信息)。"""
+    username = (username or '').strip()
+    if not username:
+        return None, '请填写用户名'
+    if not password or len(password) < 6:
+        return None, '密码至少 6 位'
+    conn = _conn()
+    try:
+        cur = conn.execute('SELECT id FROM users WHERE username=?', (username,))
+        if cur.fetchone():
+            return None, '这个用户名已经被注册了，换一个试试'
+        salt = secrets.token_hex(16)
+        phash = _hash_password(password, salt)
+        cur = conn.execute(
+            'INSERT INTO users (username,password_hash,salt,created_at) VALUES (?,?,?,?)',
+            (username, phash, salt, int(time.time())))
+        conn.commit()
+        return cur.lastrowid, None
+    finally:
+        conn.close()
+
+
+def verify_user(username, password):
+    """校验用户名密码。对返回 user_id，错（用户名不存在/密码不对）返回 None。"""
+    username = (username or '').strip()
+    conn = _conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        r = conn.execute('SELECT * FROM users WHERE username=?', (username,)).fetchone()
+        if not r:
+            return None
+        if r['password_hash'] != _hash_password(password, r['salt']):
+            return None
+        return r['id']
+    finally:
+        conn.close()
+
+
+def get_user(user_id):
+    conn = _conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        r = conn.execute(
+            'SELECT id,username,created_at FROM users WHERE id=?', (user_id,)).fetchone()
+        return dict(r) if r else None
+    finally:
+        conn.close()
+
+
+def create_session(user_id, days=30):
+    """开一个登录会话，返回 token。"""
+    token = secrets.token_urlsafe(32)
+    now = int(time.time())
+    conn = _conn()
+    try:
+        conn.execute(
+            'INSERT INTO sessions (token,user_id,created_at,expires_at) VALUES (?,?,?,?)',
+            (token, user_id, now, now + days * 86400))
+        conn.commit()
+    finally:
+        conn.close()
+    return token
+
+
+def get_user_by_token(token):
+    """token → 用户字典；过期/无效返回 None（顺手清掉过期会话）。"""
+    if not token:
+        return None
+    conn = _conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        s = conn.execute('SELECT * FROM sessions WHERE token=?', (token,)).fetchone()
+        if not s:
+            return None
+        if s['expires_at'] and s['expires_at'] < int(time.time()):
+            conn.execute('DELETE FROM sessions WHERE token=?', (token,))
+            conn.commit()
+            return None
+        return get_user(s['user_id'])
+    finally:
+        conn.close()
+
+
+def delete_session(token):
+    if not token:
+        return
+    conn = _conn()
+    try:
+        conn.execute('DELETE FROM sessions WHERE token=?', (token,))
+        conn.commit()
     finally:
         conn.close()
 

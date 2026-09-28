@@ -181,12 +181,78 @@ def meta():
     return jsonify(ok=True, natures=NATURES)
 
 
+# ------------------------- 账号体系（用户名 + 密码） -------------------------
+# 登录后简历状态绑定账号，换设备/清缓存再登录即可恢复，不必每次重传简历。
+
+@app.route('/api/auth/register', methods=['POST'])
+def api_register():
+    data = request.get_json(force=True, silent=True) or {}
+    uid, err = models.create_user(data.get('username'), data.get('password'))
+    if err:
+        return jsonify(ok=False, msg=err), 400
+    token = models.create_session(uid)
+    return jsonify(ok=True, token=token, username=models.get_user(uid)['username'])
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_login():
+    data = request.get_json(force=True, silent=True) or {}
+    uid = models.verify_user(data.get('username'), data.get('password'))
+    if not uid:
+        return jsonify(ok=False, msg='用户名或密码不对'), 401
+    token = models.create_session(uid)
+    return jsonify(ok=True, token=token, username=models.get_user(uid)['username'])
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_logout():
+    current_user()  # 触发过期清理（可选）
+    auth = request.headers.get('Authorization') or ''
+    if auth.startswith('Bearer '):
+        auth = auth[7:]
+    models.delete_session(auth.strip())
+    return jsonify(ok=True)
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def api_auth_me():
+    u = current_user()
+    if not u:
+        return jsonify(ok=False)
+    return jsonify(ok=True, username=u['username'])
+
+
+@app.route('/api/profile/me', methods=['GET'])
+def api_profile_me():
+    """取当前登录账号名下的简历（含 resume_path / resume_name）。
+    未登录返回 ok=False。前端登录后据此把「已保存的简历」回填，不必重传。"""
+    u = current_user()
+    if not u:
+        return jsonify(ok=False, msg='未登录'), 401
+    prof = models.get_profile_for_user(u['id'])
+    return jsonify(ok=True, profile=prof)
+
+
+def current_user():
+    """从 Authorization: Bearer <token> 头取登录用户；未登录返回 None。"""
+    auth = request.headers.get('Authorization') or ''
+    if auth.startswith('Bearer '):
+        auth = auth[7:]
+    auth = auth.strip()
+    if not auth:
+        return None
+    return models.get_user_by_token(auth)
+
+
 @app.route('/api/profile', methods=['POST'])
 def api_save_profile():
     data = request.get_json(force=True, silent=True) or {}
     if not (data.get('name') or '').strip():
         return jsonify(ok=False, msg='请填写姓名'), 400
-    pid = models.save_profile(data)
+    # 登录态：简历归属到账号（换设备登录还能接着用）；未登录按手机号匿名存档
+    u = current_user()
+    owner_id = u['id'] if u else None
+    pid = models.save_profile(data, owner_id=owner_id)
     return jsonify(ok=True, profile_id=pid)
 
 
@@ -244,6 +310,8 @@ def api_resume_parse():
 
     # 用户同意留一份才存。留了，自动投上传的就是这份原件（带照片和排版）。
     resume_path = _save_resume_file(filename, raw) if data.get('keep') else ''
+    # 原件「原名」一并记下来，前端才能展示「已保存的简历：xxx.pdf」
+    resume_name = filename if (data.get('keep') and resume_path) else ''
 
     cities = [str(c).strip() for c in (data.get('cities') or [])
               if str(c).strip() and str(c).strip() != '不限城市']
@@ -255,7 +323,7 @@ def api_resume_parse():
     warn = r.get('warn') or ''
     if not fields:
         return jsonify(ok=False, warn=bool(warn), got=[], low=[], fields={},
-                       resume_path=resume_path,
+                       resume_path=resume_path, resume_name=resume_name,
                        msg=(warn + '这份文件里的字也没能认出什么来。'
                                    '如果它是扫描件或者图片转的 PDF，里面的字其实是图片，读不出文字。'
                                    '下面手动填一下也很快。') if warn else
@@ -274,7 +342,8 @@ def api_resume_parse():
     if warn:
         msg = warn + '下面先按认出来的填了 %d 项，你核对一下。' % len(got)
     return jsonify(ok=True, warn=bool(warn), filename=filename, fields=fields,
-                   got=got, low=r['low'], resume_path=resume_path, msg=msg)
+                   got=got, low=r['low'], resume_path=resume_path,
+                   resume_name=resume_name, msg=msg)
 
 
 @app.route('/api/jobs/search', methods=['POST'])

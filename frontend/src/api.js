@@ -1,9 +1,15 @@
 import { io } from 'socket.io-client'
+import { getAuthHeader } from './store'
 
 async function req(url, body) {
-  const opt = body
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    : {}
+  const headers = { ...getAuthHeader() }
+  let opt
+  if (body) {
+    headers['Content-Type'] = 'application/json'
+    opt = { method: 'POST', headers, body: JSON.stringify(body) }
+  } else {
+    opt = { method: 'GET', headers }
+  }
   const r = await fetch(url, opt)
   return await r.json()
 }
@@ -52,7 +58,15 @@ export const api = {
   autofillAnswer: (taskId, value) =>
     req('/api/autofill/answer', { task_id: taskId, value }),
   // 投递前预检：国聘必填、缺了保存过不去的字段清单（单一数据源在后端）
-  autofillRequired: () => req('/api/autofill/required')
+  autofillRequired: () => req('/api/autofill/required'),
+
+  // ---- 账号体系 ----
+  authLogin: (username, password) => req('/api/auth/login', { username, password }),
+  authRegister: (username, password) => req('/api/auth/register', { username, password }),
+  authMe: () => req('/api/auth/me'),
+  authLogout: () => req('/api/auth/logout'),
+  // 登录后取回服务端档案（含已保存的简历链接），填回本地
+  loadProfile: () => req('/api/profile/me')
 }
 
 let socket = null
