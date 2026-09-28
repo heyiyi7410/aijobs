@@ -115,6 +115,13 @@ def _pdf_text(data):
         text = ''                                     # 抽失败也别慌，下面还有 OCR
     # 文字层够用就直接返回（docx/txt 走别的路，这里只管 PDF）
     if _has_text(text):
+        # 简历常见「姓名/电话印在页眉图片里」：正文是文字、联系方式却是图，
+        # pypdf 抽不到电话。若 pypdf 文本里既没有手机号也没有邮箱，
+        # 再跑一轮 OCR 把图里的联系方式也捞出来（普通文字简历不受影响，不白跑）。
+        if not re.search(r'1[3-9]\d{9}', text) and not _EMAIL_RE.search(text):
+            ocr, _ = _pdf_ocr(data)
+            if ocr:
+                text = text + '\n' + ocr
         return text, ''
     # 文字层为空/太少 → 疑似图片版简历，降级走 OCR
     ocr, oerr = _pdf_ocr(data)
@@ -150,7 +157,22 @@ def _pdf_ocr(data):
             # psm 6：假定整页是一块统一的文本；chi_sim+eng 同时认中英文
             parts.append(pytesseract.image_to_string(
                 im, lang='chi_sim+eng', config='--psm 6'))
-        return '\n'.join(parts), ''
+        text = '\n'.join(parts)
+        # 二次「只认数字」识别：中文 OCR 对长串手机号极易把 1→l、0→O、8→B，
+        # 用白名单把识别范围锁到数字和常见分隔符上，专门捞电话/手机，显著提准。
+        digits = []
+        for im in imgs:
+            try:
+                dl = pytesseract.image_to_string(
+                    im, lang='eng',
+                    config='--psm 6 -c tessedit_char_whitelist=0123456789+()- '
+                    ).splitlines()
+                digits.extend(l.strip() for l in dl if re.search(r'\d{7,}', l))
+            except Exception:                         # noqa: BLE001
+                pass
+        if digits:
+            text += '\n' + '\n'.join(digits)
+        return text, ''
     except Exception as e:                            # noqa: BLE001
         return None, 'OCR 识别失败（%s）。可以试试另存为 .docx 再传。' % str(e)[:60]
 
@@ -253,12 +275,18 @@ _PHONE_SEP = re.compile(
 
 def _find_phone(t):
     flat = _PHONE_SEP.sub('', t)
-    m = re.search(r'(?<!\d)(?:\+?86)?(1[3-9]\d{9})(?!\d)', flat)
+    # 先剥掉国家码前缀（+86 / 0086 / 86），否则 "0086 138..." 里 86 后面的
+    # 1[3-9] 会因为前导是数字而被 (?<!\\d) 挡掉。注意 186/166 这类正常号首位是 1，
+    # 其后的 "86" 前是数字，不会被误剥（(?<!\\d) 约束）。
+    flat = re.sub(r'(?<!\d)(?:\+?86|0086|086|86)\s*', '', flat)
+    m = re.search(r'(?<!\d)(1[3-9]\d{9})(?!\d)', flat)
     return m.group(1) if m else ''
 
 
+_EMAIL_RE = re.compile(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}')
+
 def _find_email(t):
-    m = re.search(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', t)
+    m = _EMAIL_RE.search(t)
     return m.group(0) if m else ''
 
 

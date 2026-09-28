@@ -1147,6 +1147,22 @@ class TestWeb(unittest.TestCase):
             rp.parse_fields('编号 1001\u200b2345 手机 13800138000')['fields']['phone'],
             '13800138000', '订单号/卡号之类不能当电话')
 
+    def test_45c_intl_prefix_phone(self):
+        import resume_parser as rp
+
+        # 国际区号写法：0086 前缀里 86 后面紧跟的 1[3-9] 因前导是数字，
+        # 会被 (?<!\d) 挡掉——先剥掉国家码前缀再匹配
+        self.assertEqual(rp._find_phone('0086 13812345678'), '13812345678')
+        self.assertEqual(rp._find_phone('86-13900001111'), '13900001111')
+        self.assertEqual(rp._find_phone('+86 13700139000'), '13700139000')
+
+        # 误伤检查：186/166 这类正常号首位是 1，其后的 86 前是数字，不许被剥
+        self.assertEqual(rp._find_phone('18612345678'), '18612345678')
+        self.assertEqual(rp._find_phone('16612345678'), '16612345678')
+        # 座机 / 超长编号仍不许认
+        self.assertEqual(rp._find_phone('电话 027-88888888'), '')
+        self.assertEqual(rp._find_phone('编号 10012345678'), '')
+
 
     # 46 —— 认不出来就返回空，绝不猜错值（猜错比不填严重得多）
     def test_46_never_guesses(self):
