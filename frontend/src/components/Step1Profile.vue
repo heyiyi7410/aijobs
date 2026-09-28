@@ -1,6 +1,8 @@
 <template>
   <div class="profile-page">
-    <div class="card upload-card">
+    <div class="card upload-card" :class="{ 'drag-over': dragging }"
+         @dragenter="onDragEnter" @dragover="onDragOver"
+         @dragleave="onDragLeave" @drop="onDrop">
       <div class="card-head">
         <span class="tile" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -11,12 +13,25 @@
         </span>
         <h2 class="card-title">上传简历并智能解析</h2>
       </div>
-      <p class="card-hint">支持 PDF、Word、txt、md 格式，自动读取简历信息</p>
+      <p class="card-hint">支持 PDF、Word、txt、md 格式，自动读取简历信息。也可以直接把文件拖进这张卡。</p>
+
+      <!-- 拖拽时盖一层提示，松手即识别 -->
+      <div v-if="dragging" class="drop-overlay">
+        <div class="drop-inner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6.8 19a4.3 4.3 0 0 1-.6-8.6 5.5 5.5 0 0 1 10.8-1.2A4.6 4.6 0 0 1 17 19z" />
+            <path d="M12 12.5V20" /><path d="m8.8 15.6 3.2-3.2 3.2 3.2" />
+          </svg>
+          <b>松手即可识别简历</b>
+          <small>支持 PDF / Word / txt / md</small>
+        </div>
+      </div>
 
       <!-- ============ 有简历就先传，省得打字 ============ -->
       <div class="up-box">
         <input ref="fileEl" class="up-file" type="file"
-               accept=".pdf,.docx,.txt,.md" @change="onPick">
+               accept=".pdf,.PDF,.docx,.txt,.md,application/pdf" @change="onPick">
 
         <!-- 已经存过简历：直接告诉用户，不必重传。点「重新上传」才覆盖 -->
         <div v-if="p.resume_path" class="uploaded-file">
@@ -442,9 +457,8 @@ function readB64(file) {
   })
 }
 
-async function onPick(e) {
-  const f = e.target.files && e.target.files[0]
-  e.target.value = ''          // 清掉，方便再传同一个文件
+/** 点选和拖拽共用：把选定的文件送去后端解析。 */
+async function handleFile(f) {
   if (!f) return
 
   msg.value = ''
@@ -453,6 +467,14 @@ async function onPick(e) {
   got.value = []
   low.value = []
   filled.value = []
+
+  // 后缀白名单（含大写），挡掉拖进来的 .exe / 文件夹之类
+  const lower = (f.name || '').toLowerCase()
+  const okExt = ['.pdf', '.docx', '.txt', '.md'].some(x => lower.endsWith(x))
+  if (!okExt) {
+    err.value = '这份文件格式不支持（' + (f.name || '未知文件') + '）。请传 PDF / Word / txt / md。'
+    return
+  }
 
   if (f.size > MAX_MB * 1024 * 1024) {
     err.value = '这个文件太大了（超过 ' + MAX_MB + ' MB）。可以只留前面一两页再传。'
@@ -489,6 +511,40 @@ async function onPick(e) {
   } finally {
     busy.value = false
   }
+}
+
+async function onPick(e) {
+  const f = e.target.files && e.target.files[0]
+  e.target.value = ''          // 清掉，方便再传同一个文件
+  await handleFile(f)
+}
+
+// ============ 拖拽上传：把文件拖进上传卡即可识别 ============
+// 必须 preventDefault：否则浏览器会把拖进来的文件当成导航，整页跳走。
+const dragging = ref(false)
+let dragDepth = 0   // 进出子元素会反复触发 enter/leave，用计数器防抖
+
+function onDragEnter(e) {
+  e.preventDefault()
+  dragDepth++
+  dragging.value = true
+}
+function onDragOver(e) {
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+  dragging.value = true
+}
+function onDragLeave(e) {
+  e.preventDefault()
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) dragging.value = false
+}
+async function onDrop(e) {
+  e.preventDefault()
+  dragDepth = 0
+  dragging.value = false
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]
+  await handleFile(f)
 }
 
 /** 把读到的值写进资料。只覆盖读出来的字段，没读到的保持原样，绝不猜。 */
@@ -579,6 +635,36 @@ onUnmounted(stopMic)
   padding: 1rem;
   margin-bottom: 1.3rem;
 }
+/* 整张卡都能接收拖拽，拖入时高亮 */
+.upload-card { position: relative; }
+.upload-card.drag-over {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-1);
+}
+/* 拖拽时盖一层提示，松手即识别 */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-1);
+  border: 2px dashed var(--primary);
+  border-radius: 1rem;
+  pointer-events: none;
+}
+.drop-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--primary-7);
+  text-align: center;
+}
+.drop-inner svg { width: 2.6rem; height: 2.6rem; color: var(--primary); }
+.drop-inner b { font-size: 1.15rem; }
+.drop-inner small { font-size: 0.9rem; color: var(--ink-2); }
 /* 整块可点的大按钮：云朵图标 + 主文案 + 格式小字（效果图） */
 .up-btn {
   width: 100%;
