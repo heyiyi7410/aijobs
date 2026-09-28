@@ -31,6 +31,14 @@
   <div class="shell" :class="{ wide: store.step === 3 }">
     <StepBar />
 
+    <!-- 上次填到一半、跳去招聘站登录后回来：档案和进度已经替他留着了。
+         不说明一句，人看着直接落在第 3、4 步会以为进了别人的页面。 -->
+    <div v-if="showRestored" class="selected-strip restoretip">
+      <span class="selected-dot" aria-hidden="true"></span>
+      <span>已接着上次的进度继续</span>
+      <button class="btn btn-mini" @click="startOver">清空重填</button>
+    </div>
+
     <Step1Profile v-if="store.step === 1" />
     <Step2Wish v-else-if="store.step === 2" />
     <Step3Match v-else-if="store.step === 3" />
@@ -75,7 +83,7 @@ import Step1Profile from './components/Step1Profile.vue'
 import Step2Wish from './components/Step2Wish.vue'
 import Step3Match from './components/Step3Match.vue'
 import Step4Apply from './components/Step4Apply.vue'
-import { store, go, profilePayload, effectiveCity } from './store'
+import { store, go, profilePayload, effectiveCity, restored, clearStore } from './store'
 import { api } from './api'
 import { canSpeak, speak, stopSpeak } from './useSpeech'
 
@@ -89,6 +97,17 @@ const HINTS = {
 // 第 2 步底部「当前选择偏好」小条用
 const p = store.profile
 const cityNow = computed(() => effectiveCity() || '不限城市')
+
+/* 上次填过、这次进来是接着上次的（跳去招聘站登录再回来就是这条路）。
+   只在真的恢复出「走过第 1 步」的内容时才提示 —— 第一次进来不该有这条。 */
+const showRestored = ref(!!(restored && restored.restored && restored.step > 1))
+
+// 「清空重填」会连他填的档案一起抹掉，先问一句，别让人手滑丢一堆字
+function startOver() {
+  if (!window.confirm('清空这里填的所有内容，从第 1 步重新开始？')) return
+  clearStore()
+  location.reload()
+}
 
 const nextText = computed(() => ({ 1: '下一步：选单位', 2: '帮我找岗位', 3: '去投递' }[store.step]))
 

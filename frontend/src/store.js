@@ -1,4 +1,4 @@
-import { reactive, computed } from 'vue'
+import { reactive, computed, watch } from 'vue'
 import { DEFAULT_NATURES } from './options'
 
 export const store = reactive({
@@ -128,3 +128,119 @@ export function canGo(step) {
 export function pickedCount() {
   return store.picked.length
 }
+
+/* ==========================================================================
+   存到手机本地：跳去招聘站登录再回来，进度不能归零
+   ------------------------------------------------------------------------
+   手机浏览器的真实行为：点「去官网投」跳到招聘站（或微信里扫码登录），
+   回来时这个页面常被系统回收后**重新加载** —— 以前 store 只在内存里，
+   一重载就回到第 1 步，档案、挑好的岗位、走到第几步全没了。
+   用户的话就是「扫完码再回来啥都没了」。
+
+   所以把「人填的东西」和「走到哪一步」写进 localStorage：
+   重新打开时先恢复，再往下走。
+
+   两个刻意的取舍：
+   1) 只存「人填的」，不存「正在跑的」（loading/err/task/applying）——
+      存了会在恢复瞬间让界面停在假的「正在加载」，而实际什么都没在跑。
+   2) 存坏了不能让整站打不开：localStorage 里可能是上个版本的结构、也可能
+      被人手动改过，读出来一律 try/catch 包住，坏了就当没存过。
+   ========================================================================== */
+
+const PERSIST_KEY = 'zhaojobs.state.v1'
+
+// 正在跑的状态不落盘：恢复出来是假的「忙」，反而把人卡住
+const NOT_PERSISTED = ['loading', 'err', 'task', 'applying', 'companySearching']
+
+// 岗位列表可能很长（放宽城市时几百条），localStorage 只有 5M 左右。
+// 超过这个量就只存挑中的岗位 key，列表重载后重新匹配一次即可。
+const SIZE_LIMIT = 1.5 * 1024 * 1024
+
+function _snapshot() {
+  const out = {}
+  for (const k of Object.keys(store)) {
+    if (NOT_PERSISTED.includes(k)) continue
+    out[k] = JSON.parse(JSON.stringify(store[k]))
+  }
+  return out
+}
+
+export function saveStore() {
+  try {
+    let snap = _snapshot()
+    let text = JSON.stringify(snap)
+    if (text.length > SIZE_LIMIT && Array.isArray(snap.jobs)) {
+      // 太大就丢掉岗位明细：下次进来重新搜一次就行，
+      // 但「挑了哪些」必须留着，那是人一个个点出来的
+      snap = { ...snap, jobs: [], allJobs: [] }
+      text = JSON.stringify(snap)
+    }
+    localStorage.setItem(PERSIST_KEY, text)
+  } catch (e) {
+    /* 隐私模式 / 配额满 / 存不进：不存也能用，只是回来要重填，别打断当前流程 */
+  }
+}
+
+/** 把上次存的东西填回来。返回的 flag 只给界面用（比如提示「已接着上次」）。 */
+export function restoreStore() {
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY)
+    if (!raw) return { restored: false }
+    const o = JSON.parse(raw)
+    if (!o || typeof o !== 'object') return { restored: false }
+    for (const k of Object.keys(o)) {
+      if (NOT_PERSISTED.includes(k)) continue
+      if (!(k in store)) continue          // 结构变了就忽略不认识的东西
+      const v = o[k]
+      if (k === 'profile') {
+        // 逐字段盖：留着新版本新增字段的默认值，老存档不会把它清成空
+        if (v && typeof v === 'object') Object.assign(store.profile, v)
+      } else if (store[k] && typeof store[k] === 'object' && !Array.isArray(store[k])) {
+        Object.assign(store[k], v)         // resumeReview / meta 这类小对象
+      } else {
+        store[k] = v
+      }
+    }
+    // 存档里的 step 不能越过 maxStep（点进没到过的步骤是空白页）
+    if (!Number.isFinite(store.step) || store.step < 1) store.step = 1
+    if (store.step > store.maxStep) store.maxStep = store.step
+    if (store.maxStep < 1) store.maxStep = 1
+    return { restored: true, step: store.step }
+  } catch (e) {
+    return { restored: false }             // 读坏了当作没存过，绝不让整站打不开
+  }
+}
+
+export function clearStore() {
+  try {
+    localStorage.removeItem(PERSIST_KEY)
+  } catch (e) { /* 同上，清不掉也不影响继续用 */ }
+}
+
+/* 真正的存档时机：任何改动后 400ms 写一次。
+   不用 immediate —— 初始化时会先 restore 再 watch，immediate 会把刚恢复的
+   内容原样写回去，虽然结果一样，但没必要多一次磁盘写。
+   防抖是必须的：输入框每敲一个字都会触发，逐字写盘在手机上会卡。 */
+let _saveTimer = null
+watch(
+  store,
+  () => {
+    clearTimeout(_saveTimer)
+    _saveTimer = setTimeout(saveStore, 400)
+  },
+  { deep: true }
+)
+
+// 关页面/切到后台前补一次：防抖窗口里的最后一次改动别丢。
+// 手机上「切到别的 App」比「关闭页面」常见得多，visibilitychange 才是主路径。
+const _flush = () => {
+  clearTimeout(_saveTimer)
+  saveStore()
+}
+window.addEventListener('pagehide', _flush)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') _flush()
+})
+
+// 模块一加载就把上次的进度填回来
+export const restored = restoreStore()
