@@ -23,6 +23,7 @@ import threading
 import time
 import traceback
 import uuid
+from urllib.parse import urlparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
@@ -33,7 +34,16 @@ RESUME_DIR = os.path.join(ROOT_DIR, 'data', 'resumes')
 # 浏览器登录态存在这个目录：用户登录一次国聘，cookie 就永久留着，
 # 以后每次投递自动带上，不用再扫码。没这个，每单都是匿名浏览器，永远卡登录墙。
 PROFILE_DIR = os.path.join(ROOT_DIR, 'data', 'browser_profile')
+
+# 光有上面那个目录还不够，这是实测踩出来的坑（2026-09-28）：
+# 招聘站的登录凭证多半是**会话 cookie**（没有过期时间，JSESSIONID 那类），
+# 而会话 cookie 只活在内存里 —— 投递一结束 ctx.close()，它就没了，
+# 下次开浏览器照样是未登录，于是「扫完码再回来状态没了」。
+# 所以再按站点导出一份 storage_state：会话 cookie 也会被写进这个文件，
+# 下次启动原样带回去。人登录一次，这个网站以后真的不用再登。
+LOGIN_DIR = os.path.join(ROOT_DIR, 'data', 'logins')
 os.makedirs(SHOT_DIR, exist_ok=True)
+os.makedirs(LOGIN_DIR, exist_ok=True)
 
 # 浏览器吃内存，一次只跑一个
 _LOCK = threading.Semaphore(1)
@@ -528,6 +538,10 @@ def _run(t):
                 timezone_id='Asia/Shanghai',
                 args=['--disable-blink-features=AutomationControlled'],
             )
+            # 把上次存下来的登录态灌回去（会话 cookie 靠它续命，见 LOGIN_DIR 注释）。
+            # 必须在打开页面之前做，晚了这一趟就是匿名的。
+            if _load_login(ctx, t.url):
+                t.step('带上了上次在这个网站的登录', note='这次不用再登录了')
             try:
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
                 # 政府网站爱用 confirm 弹窗，先自动点掉，不然会卡死
@@ -3756,36 +3770,207 @@ def _flow(t, page):
         _fill_apply_form(t, page)
 
     if t.status != 'error':
+        # 投递走完顺手续一次登录态：这趟里站点很可能刚刷新过 cookie，
+        # 存下来下次才是新鲜的（不存的话，等下次用到可能已经过期了）
+        _save_login(page, t.url)
         t.status = 'done'
         t.push()
+
+
+def _state_file(url):
+    """一个站点一份登录态：换网站不会互相顶掉，清掉一家也不影响别家。"""
+    try:
+        host = (urlparse(url or '').netloc or '').lower()
+    except Exception:                            # noqa: BLE001
+        host = ''
+    host = re.sub(r'[^a-z0-9.\-]', '_', host).strip('.') or 'unknown'
+    return os.path.join(LOGIN_DIR, host + '.json')
+
+
+def _save_login(page, url):
+    """把当前的登录状态存成文件 —— 会话 cookie 也会一起带走（见 LOGIN_DIR 注释）。
+
+    存不下就算了：最坏是下次还得登录一次，绝不能因为这个打断正在跑的投递。
+    """
+    try:
+        page.context.storage_state(path=_state_file(url))
+        return True
+    except Exception:                            # noqa: BLE001
+        return False
+
+
+def _load_login(ctx, url):
+    """把上次存下的登录态灌回浏览器。
+
+    实测踩的坑（2026-09-28）：persistent context **不接受** storage_state 参数
+    （传了直接 TypeError，整单崩掉），只能在启动之后把 cookie 一个个加回去。
+    localStorage 里的凭证同理，得按站点写回去 —— 不加 origin 判断会污染别的网站。
+    """
+    sf = _state_file(url)
+    if not os.path.isfile(sf):
+        return False
+    try:
+        with open(sf, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception:                            # noqa: BLE001
+        return False
+
+    got = False
+    cookies = data.get('cookies') or []
+    if cookies:
+        try:
+            ctx.add_cookies(cookies)
+            got = True
+        except Exception:                        # noqa: BLE001
+            pass
+
+    # 有些站把凭证放 localStorage（token 那种），cookie 里没有
+    for o in data.get('origins') or []:
+        items = o.get('localStorage') or []
+        origin = o.get('origin') or ''
+        if not items or not origin:
+            continue
+        kv = {}
+        for i in items:
+            if i.get('name'):
+                kv[i['name']] = i.get('value', '')
+        if not kv:
+            continue
+        try:
+            ctx.add_init_script(
+                '(() => { try {'
+                '  if (location.origin !== %s) return;'
+                '  const kv = %s;'
+                '  for (const k in kv) localStorage.setItem(k, kv[k]);'
+                '} catch (e) {} })()' % (json.dumps(origin), json.dumps(kv)))
+            got = True
+        except Exception:                        # noqa: BLE001
+            continue
+    return got
+
+
+# 登录页上「验证码登录」的入口叫法（各站不一，尽量全）
+_SMS_TAB = ('短信验证码登录', '验证码登录', '手机验证码登录', '短信登录',
+            '免密登录', '手机号登录', '手机登录')
+_SMS_SEND = ('获取验证码', '发送验证码', '获取短信验证码', '获取动态码')
+_LOGIN_SUBMIT = ('登录', '登 录', '立即登录', '登录并投递')
+
+
+def _first_box(page, candidates):
+    """按顺序找第一个真存在的输入框，找不到返回 None。
+
+    站点各不相同：有的只有 type=tel，有的靠 placeholder 提示，有的靠 name。
+    一个一个试，别因为第一种写法没有就整条路放弃。"""
+    for make in candidates:
+        try:
+            loc = make()
+            if loc and loc.count():
+                return loc.first
+        except Exception:                        # noqa: BLE001
+            continue
+    return None
+
+
+def _login_by_sms(t, page):
+    """用「手机号 + 短信验证码」登录 —— 一台手机就能走完的那条路。
+
+    扫码得用**另一台**设备：他这台正看着这个页面，扫不了自己屏幕上的码，
+    这是手机上登录最难的一步。验证码是发到他本人手机上的，他读出来填进
+    下面的框，我替他敲进浏览器。
+
+    返回 True = 这条路试着走了（成没成由 _need_auth 判定）；
+    没手机号 / 找不到入口 = False，交给调用方回退到扫码。
+    """
+    phone = (t.profile.get('phone') or '').strip()
+    if not re.fullmatch(r'1\d{10}', phone):
+        return False
+
+    if _click_any(page, _SMS_TAB):
+        _settle(page)
+
+    box = _first_box(page, (
+        lambda: page.locator('input[type=tel]'),
+        lambda: page.get_by_placeholder(re.compile('手机号|手机号码|手机|号码')),
+        lambda: page.locator('input[name*=mobile], input[name*=phone], '
+                             'input[id*=mobile], input[id*=phone]'),
+    ))
+    if not box:
+        return False
+    try:
+        box.fill(phone)
+    except Exception:                            # noqa: BLE001
+        return False
+
+    masked = phone[:3] + '****' + phone[-4:]
+    t.step('手机号填好了，正在问你要验证码', note=masked)
+    if not _click_any(page, _SMS_SEND):
+        return False
+    _settle(page, 1200)
+    t.shot(page, '等你把验证码发过来')
+
+    code = t.ask_human(
+        'sms', '验证码发到你手机上了',
+        '短信已经发到 %s。把收到的数字填进来，我替你敲进浏览器登录。' % masked,
+        placeholder='短信里的数字',
+        # number 让手机直接弹数字键盘：验证码就几位数字，还要切键盘太折腾
+        itype='number')
+    code = re.sub(r'\D', '', code or '')
+    if not code:
+        return False
+
+    cbox = _first_box(page, (
+        lambda: page.get_by_placeholder(re.compile('验证码|动态码|校验码')),
+        lambda: page.locator('input[name*=code], input[id*=code], '
+                             'input[name*=verif], input[type=number]'),
+    ))
+    if not cbox:
+        return False
+    try:
+        cbox.fill(code)
+    except Exception:                            # noqa: BLE001
+        return False
+    _click_any(page, _LOGIN_SUBMIT)
+    _settle(page, 1500)
+    t.shot(page, '验证码已提交')
+    return True
 
 
 def _wait_login(t, page):
     """登录墙：扫码/短信验证码只能人来，机器代劳不了。
 
-    能做的都做了：登录状态存在本地浏览器目录（PROFILE_DIR）里，
-    人登录一次，这家网站以后的所有投递都不用再登。
+    手机上怎么让人真登进去，按可行顺序试：
+    1) 短信验证码 —— 验证码发到他本人手机，他读给我，我替他敲（一台手机就够）；
+    2) 扫码 —— 二维码在截图里，得用另一台设备扫。
+    登录成功后立刻把状态存成文件（见 LOGIN_DIR 注释），这个网站以后不用再登。
     """
     t.step('对方要求先登录才能投递', ok=False)
     t.shot(page, '登录窗口')
+
+    # 1) 验证码登录：手机上唯一能自己走完的路，先试它
+    if _login_by_sms(t, page):
+        _wait_real_content(page)
+        if not _need_auth(page):
+            _finish_login(t, page)
+            return
+        t.step('验证码这条路没走通，换扫码再试', ok=False)
+
+    # 2) 只能扫码：必须说清楚要用另一台设备，否则人会对着自己的屏幕扫半天
+    t.shot(page, '登录窗口（要扫码）')
     if t.headless:
-        tip = ('这个网站必须登录后才能投，但这次是后台模式，你看不到浏览器。'
-               '请回到上一页，勾上「显示浏览器」重新点一次自动填，'
-               '在弹出的浏览器里登录一下（扫码或收验证码）。'
-               '登录一次就被记住了，以后投这个网站不用再登。')
+        tip = ('这个网站要先登录才能投，登录只能你来：下面这张截图就是它现在的样子。\n'
+               '先找找上面有没有「短信验证码登录」，有的话点它——验证码发到你手机上，最快；\n'
+               '只剩二维码的话，请用**另一台**手机扫（你现在这台正看着这个页面，'
+               '扫不了自己屏幕上的码）。\n'
+               '登录成功后随便输个字点确认。这次登录会被记住，'
+               '以后投这个网站不用再登了。')
     else:
         tip = ('请在刚弹出的浏览器窗口里登录这个网站（扫码或收验证码都行）。'
                '登录一次就被记住了，以后投这个网站的其它岗位不用再登。'
                '登录好了回到这里随便输个字点确认。')
     t.ask_human('login', '这一步需要你登录', tip,
                 placeholder='登录好了就随便输个字点确认')
-    # 登录完站点多半把你丢在首页或骨架屏，不会自己回到岗位页——
-    # 必须重新打开岗位地址，并等正文真正渲染出来（骨架屏上什么都没有）
-    try:
-        page.goto(t.url, wait_until='domcontentloaded', timeout=40000)
-    except Exception:                            # noqa: BLE001
-        pass
-    _wait_real_content(page)
+
+    _back_to_job(t, page)
     if _need_auth(page):
         # 登录没成（二维码过期/没点确认）：再给一次机会，别拿没登录的页面硬填
         t.step('看起来还没登录成功，请重新登录后再确认一次', ok=False)
@@ -3793,17 +3978,31 @@ def _wait_login(t, page):
         t.ask_human('login', '还是没检测到登录', '浏览器里这个网站看起来还没登录上。'
                     '请确认登录成功后，再随便输个字点确认。',
                     placeholder='登录成功了就随便输个字点确认')
-        try:
-            page.goto(t.url, wait_until='domcontentloaded', timeout=40000)
-        except Exception:                        # noqa: BLE001
-            pass
-        _wait_real_content(page)
-    # 回到岗位页后，重新把投递表单点出来
+        _back_to_job(t, page)
+    _finish_login(t, page)
+
+
+def _back_to_job(t, page):
+    """登录完站点多半把人丢在首页或骨架屏，不会自己回到岗位页——
+    必须重新打开岗位地址，并等正文真正渲染出来（骨架屏上什么都没有）。"""
+    try:
+        page.goto(t.url, wait_until='domcontentloaded', timeout=40000)
+    except Exception:                            # noqa: BLE001
+        pass
+    _wait_real_content(page)
+
+
+def _finish_login(t, page):
+    """登录收尾：把投递表单重新点出来，并把登录状态存下来。"""
     if _click_any(page, _APPLY_BTNS):
         _settle(page)
     _wait_real_content(page, 15)
     _settle(page)
     t.shot(page, '登录后回到投递页')
+    # 只要不再是登录墙就存：下次投这个网站直接带上，不用再扫码。
+    # 万一其实没登成，存下来的也只是没登录的状态，不会比现在更糟。
+    if not _need_auth(page) and _save_login(page, t.url):
+        t.step('登录状态已记住', note='以后投这个网站不用再登录了')
 
 
 def _need_auth(page):

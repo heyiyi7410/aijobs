@@ -60,7 +60,7 @@
 
       <label class="af-chk">
         <input type="checkbox" v-model="showBrowser">
-        打开浏览器窗口（能看见它在动，慢一点但心里有底）
+        打开浏览器窗口（只有装在您自己的电脑上才看得见，服务器上没有屏幕）
       </label>
 
       <label class="af-chk">
@@ -166,8 +166,9 @@
             v-model="input"
             @keyup.enter="answer(input)"
           >
+          <!-- 验证码这一步说清「填了就替我登录」，别让人猜点下去会发生什么 -->
           <button class="btn btn-primary" style="margin-top:.7rem;" @click="answer(input)">
-            填好了，继续
+            {{ t.ask.type === 'sms' ? '验证码填好了，替我登录' : '填好了，继续' }}
           </button>
         </template>
       </div>
