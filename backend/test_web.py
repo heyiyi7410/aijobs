@@ -1124,6 +1124,30 @@ class TestWeb(unittest.TestCase):
         # 明确写了年限才认年限
         self.assertEqual(rp.parse_fields('工作经验：4年')['fields']['exp'], '3-5年')
 
+    # 45b —— PDF 抽出来的号码被零宽空格等「隐形间隔」切碎时也要认得出来
+    # （这正是「docx/txt 正常、PDF 抽不到电话」的根因）
+    def test_45b_pdf_invisible_sep_phone(self):
+        import resume_parser as rp
+
+        # pypdf 在双栏/表格 PDF 里常在每个数字间插零宽空格(\u200b)，
+        # 把「13812345678」切成「1\u200b3\u200b8…」，导致 11 位连不起来。
+        phone = '\u200b'.join('13812345678')
+        t = '姓名：周九\n手机：%s\n邮箱 z@qq.com\n' % phone
+        self.assertEqual(rp.parse_fields(t)['fields']['phone'], '13812345678',
+                         '零宽空格切碎的号码要能拼回 11 位')
+
+        # PDF 头部常见的 BOM(\ufeff) + 零宽不连字(\u200c)
+        feff = '\uFEFF' + '139' + '\u200c' + '00001111'
+        t2 = '联系电话：%s\n' % feff
+        self.assertEqual(rp.parse_fields(t2)['fields']['phone'], '13900001111',
+                         'BOM / 零宽字符不能挡住号码识别')
+
+        # 不是 11 位有效手机号（夹着隐形字符的短编号）→ 仍不许瞎认
+        self.assertEqual(
+            rp.parse_fields('编号 1001\u200b2345 手机 13800138000')['fields']['phone'],
+            '13800138000', '订单号/卡号之类不能当电话')
+
+
     # 46 —— 认不出来就返回空，绝不猜错值（猜错比不填严重得多）
     def test_46_never_guesses(self):
         import resume_parser as rp
