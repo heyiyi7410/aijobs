@@ -4,8 +4,7 @@
     <div v-if="!taskId && !filling" class="card">
       <h2 class="card-title">帮我自动填（测试版）</h2>
       <p class="card-hint">
-        我会开一个浏览器，替你注册账号、再把简历一项项填进招聘网站，
-        填完停在「提交」前面让你看一眼。
+        我会打开填写页面，尝试填入可识别的简历字段。登录、复杂控件和最终提交需要你本人操作。
       </p>
 
       <div class="af-note">
@@ -41,20 +40,20 @@
       </div>
 
       <div class="af-custom">
-        <label class="af-flabel">或者用别处的链接（粘贴任意投递页）</label>
+        <label class="af-flabel">或者粘贴其他招聘网站的表单链接</label>
         <input
           class="af-input"
           v-model="customUrl"
           placeholder="把招聘网站的投递页链接粘进来，例如 https://jobs.xxx.com/apply/123"
         >
         <p class="muted" style="margin:.4rem 0 0;" v-if="!customUrl.trim()">
-          不限于这里的岗位——任何要填表的招聘页，粘进来我就打开它替你填。
+          支持普通输入框、原生下拉框及 iframe 内的普通表单；复杂控件、多页流程可能需要手动处理。请使用可信网站，填写内容可能被网站自动保存。
         </p>
         <p class="af-warn" style="margin:.4rem 0 0;" v-else-if="!urlValid">
           链接要以 http:// 或 https:// 开头才有效。
         </p>
         <p class="muted" style="margin:.4rem 0 0;" v-else>
-          我会打开这个链接，替你把简历一项项填进去。
+          我会打开这个链接并尝试填写，不会自动点击申请或最终提交。
         </p>
       </div>
 
@@ -147,7 +146,10 @@
           </p>
         </div>
 
-        <template v-if="t.ask.type === 'confirm' || t.ask.type === 'promise'">
+        <template v-if="t.ask.type === 'handoff'">
+          <button class="btn btn-primary" style="margin-top:.7rem;" @click="answer('close')">结束并关闭窗口</button>
+        </template>
+        <template v-else-if="t.ask.type === 'confirm' || t.ask.type === 'promise'">
           <div style="display:flex; gap:.8rem; margin-top:.8rem;">
             <button class="btn btn-primary" style="flex:1;" @click="answer('yes')">
               {{ yesText }}
@@ -216,6 +218,7 @@
       <p v-if="t.status === 'error'" class="af-err">
         出错了：{{ (t.error || '').split('\n').slice(-3).join(' ') }}
       </p>
+      <p v-if="t.note" class="af-note" role="status">{{ t.note }}</p>
 
       <button v-if="t.status === 'done' || t.status === 'error'"
               class="btn btn-big" style="margin-top:1rem;" @click="reset">
@@ -297,7 +300,7 @@ const lastShot = computed(() => {
 const statusText = computed(() => {
   const s = t.value.status
   if (s === 'need_human') return '需要你出手一下'
-  if (s === 'done') return '办完了'
+  if (s === 'done') return '本次填表流程已结束'
   if (s === 'error') return '出问题了'
   return '正在办'
 })
@@ -306,6 +309,7 @@ const statusText = computed(() => {
 // 而不是含糊的「确认提交」——用户根本不知道点下去会发生什么。
 const yesText = computed(() => {
   const a = t.value.ask || {}
+  if (a.yes_label) return a.yes_label
   if (a.items && a.items.length) return '我补齐了，继续投递'
   if (a.type === 'promise') return '我同意，帮我勾上'
   return '确认提交'
@@ -313,6 +317,7 @@ const yesText = computed(() => {
 
 const noText = computed(() => {
   const a = t.value.ask || {}
+  if (a.no_label) return a.no_label
   if (a.items && a.items.length) return '我还没补好'
   if (a.type === 'promise') return '先不勾'
   return '先不提交'

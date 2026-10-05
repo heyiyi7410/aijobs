@@ -129,10 +129,14 @@ def _match_field(meta):
     primary = ('%s %s' % (meta.get('label', ''), meta.get('ph', ''))).lower()
     secondary = ('%s %s %s' % (meta.get('name', ''), meta.get('id', ''),
                                meta.get('cls', ''))).lower()
+    context = ' '.join((primary, secondary, meta.get('context', '').lower()))
+    if re.search(r'紧急|联系人|推荐人|证明人|家属|家庭成员|父亲|母亲|配偶|亲属|emergency|contact.?person|next.?of.?kin|spouse|father|mother|reference.?name|reference.?phone', context):
+        return None  # 第三方信息绝不能用求职者本人的资料代填。
     for field, keys in _FIELD_RULES:
         if _hit(primary, keys):
             return field
-    if not primary.strip():
+    generic = re.sub(r'[\s*：:：()（）]', '', primary)
+    if not generic or generic in ('请输入', '请填写', '请选择', '选填', '必填', 'input', 'enterhere'):
         for field, keys in _FIELD_RULES:
             if _hit(secondary, keys, strict=True):
                 return field
@@ -213,7 +217,7 @@ class Task(object):
         self.push()
 
     def ask_human(self, kind, title, msg, placeholder='', itype='text',
-                  timeout=900, items=None):
+                  timeout=900, items=None, yes_label=None, no_label=None):
         """停在这里等人。浏览器保持开着，等人这一下不会丢上下文。
 
         items：**需要用户本人补的清单**（结构化）。站点只在简历目录里把没完成的
@@ -224,6 +228,10 @@ class Task(object):
         """
         self.ask = {'type': kind, 'title': title, 'msg': msg,
                     'placeholder': placeholder, 'input_type': itype}
+        if yes_label:
+            self.ask['yes_label'] = yes_label
+        if no_label:
+            self.ask['no_label'] = no_label
         if items:
             self.ask['items'] = items
         self.status = 'need_human'
@@ -324,7 +332,10 @@ _SCAN_JS = r"""
     // 单选/多选的 label 写的是「选项名」（男、女），不是字段名（性别），
     // 所以这两个要跳过 label，直接去表格里找左边那格。
     const isChoice = (el.type === 'radio' || el.type === 'checkbox');
-    let label = '';
+    let label = el.getAttribute('aria-label') || '';
+    if (!label && el.getAttribute('aria-labelledby')) {
+      label = el.getAttribute('aria-labelledby').split(/\s+/).map(id => document.getElementById(id)?.innerText || '').join(' ');
+    }
     if (el.id && !isChoice) {
       const l = document.querySelector('label[for="' + el.id + '"]');
       if (l) label = l.innerText;
@@ -352,6 +363,8 @@ _SCAN_JS = r"""
       idx: i, tag: el.tagName.toLowerCase(), type: (el.type || '').toLowerCase(),
       name: el.name || '', id: el.id || '', ph: el.placeholder || '',
       label: (label || '').replace(/\s+/g, ' ').trim().slice(0, 40),
+      context: el.closest('fieldset')?.querySelector('legend')?.innerText || el.closest('section')?.getAttribute('aria-label') || '',
+      value: el.value || '', disabled: el.disabled || el.readOnly, checked: !!el.checked,
       visible: !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length),
       cls: (typeof el.className === 'string' ? el.className : '')
     };
@@ -366,15 +379,19 @@ def _scan_fields(page):
     隐藏域要排掉：它们没有 label，取到的是整个表单的文字，会把「验证码」这种词
     误按到隐藏域头上。
     """
-    try:
-        out = page.evaluate(_SCAN_JS) or []
-    except Exception:                            # noqa: BLE001
-        return []
+    out = []
+    for frame in page.frames:
+        try:
+            for m in frame.evaluate(_SCAN_JS) or []:
+                m['_frame'] = frame  # 保留真实 frame，动态 iframe 不依赖易变的下标。
+                out.append(m)
+        except Exception:                       # 已卸载/不可读的 frame 不阻断其他表单
+            continue
     return [m for m in out if m.get('type') != 'hidden' and m.get('type') != 'submit']
 
 
 def _loc(page, meta):
-    return page.locator('[data-af-idx="%s"]' % meta['idx'])
+    return meta.get('_frame', page).locator('[data-af-idx="%s"]' % meta['idx'])
 
 
 def _fill_one(page, meta, value):
@@ -400,19 +417,26 @@ def _fill_one(page, meta, value):
         return False
 
 
+def _safe_navigation_target(loc):
+    # 即使“登录”模糊匹配到“登录并投递”，也不能绕过最终提交保护。
+    text = ' '.join((loc.inner_text() or '', loc.get_attribute('aria-label') or '',
+                     loc.get_attribute('value') or ''))
+    return not re.search(r'投递|申请|应聘|提交|注册|确认同步|删除|\bsubmit\b|\bapply\b|\bregister\b|\bdelete\b', text, re.I)
+
+
 def _click_any(page, names, roles=('button', 'link')):
     for n in names:
         for role in roles:
             try:
                 loc = page.get_by_role(role, name=n, exact=False)
-                if loc.count():
+                if loc.count() and _safe_navigation_target(loc.first):
                     loc.first.click(timeout=3000)
                     return True
             except Exception:                    # noqa: BLE001
                 pass
         try:
             loc = page.get_by_text(n, exact=False)
-            if loc.count():
+            if loc.count() and _safe_navigation_target(loc.first):
                 loc.first.click(timeout=3000)
                 return True
         except Exception:                        # noqa: BLE001
@@ -503,6 +527,10 @@ def _resume_file_for_upload(t):
 
 
 # --------------------------------------------------------------- 主流程
+def _dismiss_dialog(dialog):
+    dialog.dismiss()
+
+
 def _run(t):
     try:
         from playwright.sync_api import sync_playwright
@@ -526,6 +554,7 @@ def _run(t):
         headless = True
         t.step('这台服务器没有显示器', ok=False,
                note='已改为后台填，过程照常截图给你看')
+    t.headless = headless
     try:
         with sync_playwright() as pw:
             # 持久化浏览器：登录态跨任务保留（见 PROFILE_DIR 的注释）
@@ -544,8 +573,8 @@ def _run(t):
                 t.step('带上了上次在这个网站的登录', note='这次不用再登录了')
             try:
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                # 政府网站爱用 confirm 弹窗，先自动点掉，不然会卡死
-                page.on('dialog', lambda d: d.accept())
+                # confirm 可能意味着投递/覆盖，不能无条件同意。
+                page.on('dialog', _dismiss_dialog)
                 _flow(t, page)
             finally:
                 ctx.close()
@@ -555,7 +584,11 @@ def _run(t):
         t.step('提前收工', ok=False, note='你重新开了一单')
     except Exception:
         t.status = 'error'
-        t.error = traceback.format_exc()[-1200:]
+        detail = traceback.format_exc()
+        if "Executable doesn't exist" in detail or 'playwright install' in detail:
+            t.error = '浏览器组件未安装。请在运行后端的 Python 环境执行：python -m playwright install chromium，然后重试。'
+        else:
+            t.error = detail[-1200:]
         t.push()
     finally:
         _LOCK.release()
@@ -3693,54 +3726,30 @@ def _guopin_resume_guard(t, page):
             placeholder='补完了就随便输个字点确认')
         _settle(page)
 
-    if os.environ.get('GP_NO_SUBMIT') == '1':
-        t.step('测试模式：简历已补完，停在点「申请职位」之前，不真投', ok=True)
-        t.shot(page, '测试模式停在提交前')
-        t.status = 'done'
-        return True
-
-    # 补完点「申请职位」。国聘这条路是**后端**校验简历完整性：不完整就返回
-    # code=88002「简历数据不完整」，前端弹一个「申请失败」的框（2026-09-20 实测，
-    # 抓包见 POST /personal/apply/resume/v1/deliver）。
-    # 旧代码只找「知道了」三个字，等于把失败原因丢了——用户只看到「失败」。
-    # 现在把原因读出来、把还缺的段列清楚，让他一次补到位，再重试（最多 3 轮）。
-    for _ in range(3):
-        if not _gp_click_apply(page):
-            t.missing.append({'label': '申请职位',
-                              'why': '没找到「申请职位」按钮，需要你手动点'})
-            break
-        t.step('点了申请职位')
-        page.wait_for_timeout(2800)
-        t.shot(page, '点了申请职位后')
-        # 成功：弹出「确认同步简历」→ 点掉即投递完成
-        if _click_any(page, ('确认同步', '确 认 同 步')):
-            t.step('确认同步简历')
-            page.wait_for_timeout(2000)
-            break
-        fail = _gp_apply_fail_text(page)
-        if not fail:
-            t.step('申请已提交（没有失败提示）', ok=True)
-            break
-        # 失败：关掉弹窗，把原因 + 还缺的段如实告诉用户，请他补完再重试
-        _click_any(page, ('知道了', '知 道 了'))
-        page.wait_for_timeout(900)
-        blockers = _gp_blockers(page)
-        lack = ('、'.join(b['label'] for b in blockers)
-                or _gp_missing_sections_desc(page))
-        t.step('申请被拦下：%s' % fail, ok=False)
-        t.shot(page, '申请失败-待人工补')
-        t.ask_human(
-            'confirm', '申请没通过：%s' % fail,
-            '国聘后端校验简历完整性时返回「%s」，判定还差这几段：%s。'
-            '这些内容只有你本人能提供，AI 代填等于替你编材料。'
-            '每段的「为什么不能替你补」和「怎么补最快」见下面清单；'
-            '补齐并保存后回到这个页面点下面的按钮，我再替你点一次申请。'
-            % (fail, lack),
-            placeholder='补完了就随便输个字点确认',
-            items=blockers)
-        _settle(page)
-    t.shot(page, '投递结束')
+    # 自动填表不等于自动投递。国聘也统一转人工，不能绕过通用提交保护。
+    _handoff(t, page)
     return True
+
+
+def _handoff(t, page):
+    """只报告填写结果；本机有窗口时保持会话供用户核对，最长 15 分钟。"""
+    summary = '本次自动填写 %d 项，另有 %d 项需要核对或手动处理。' % (len(t.filled), len(t.missing))
+    t.note = summary + '程序未点击最终提交。'
+    t.shot(page, '填写结果：请核对，未自动提交')
+    if not t.headless:
+        # 人工接管后不再拦截其亲自触发的确认框，否则本人也无法提交。
+        page.remove_listener('dialog', _dismiss_dialog)
+        answer = t.ask_human(
+            'handoff', '请在浏览器窗口核对并继续',
+            summary + '窗口最多保留 15 分钟。可在窗口中补填、翻页或自行提交；'
+            '处理完再点“结束并关闭窗口”。不要启动另一单，否则本窗口会关闭。',
+            yes_label='结束并关闭窗口', no_label='结束并关闭窗口')
+        t.note = summary + ('窗口已按你的要求关闭。' if answer else '等待超时，窗口已关闭。') + '程序未点击最终提交。'
+    else:
+        t.note += '当前是服务器后台浏览器，截图不能操作；流程结束后窗口关闭。'
+        t.note += '需要手动补填或提交时，请在自己电脑运行并勾选“打开浏览器窗口”；也可到原网站手动填写，未保存内容不会自动同步。'
+    t.push()
+
 
 def _flow(t, page):
     t.step('打开投递页面', note=t.url)
@@ -3751,22 +3760,21 @@ def _flow(t, page):
 
     if _need_auth(page):
         _wait_login(t, page)
+        if _need_auth(page):
+            t.error = '尚未完成登录，未尝试填写申请表。请先登录后再使用直接表单链接。'
+            _handoff(t, page)
+            t.status = 'error'
+            t.push()
+            return
 
-    # 先把投递表单弄出来再认字段——不然在详情页上扫一圈一个填写项都没有，
-    # 流程照样走完，看起来「投递成功」其实什么都没发生（2026-09-18 实测国聘就是）
-    if _click_any(page, _APPLY_BTNS):
-        t.step('点了申请按钮，等投递表单弹出来')
-        _settle(page)
-        _wait_real_content(page, 10)
-        t.shot(page, '投递表单应该弹出来了')
-
-    if _need_auth(page):
-        _wait_login(t, page)
+    # “立即申请/投递简历”可能直接创建申请，不能当作无害的展开按钮点击。
 
     # 国聘这类站会先拦一道「站内简历不完善」，补完才放真正的表单。
     # guard 返回 True 表示这一站它全包了（简历段填完 + 点申请），
     # 别再让通用填表把简历字段又扫一遍——那只会把已填的报成「不认识」。
-    if not _guopin_resume_guard(t, page):
+    host = (urlparse(page.url).hostname or '').lower()
+    is_guopin = host == 'iguopin.com' or host.endswith('.iguopin.com')
+    if not (is_guopin and _guopin_resume_guard(t, page)):
         _fill_apply_form(t, page)
 
     if t.status != 'error':
@@ -3993,9 +4001,7 @@ def _back_to_job(t, page):
 
 
 def _finish_login(t, page):
-    """登录收尾：把投递表单重新点出来，并把登录状态存下来。"""
-    if _click_any(page, _APPLY_BTNS):
-        _settle(page)
+    """登录收尾：保留当前页面，不自动点击可能直接投递的按钮。"""
     _wait_real_content(page, 15)
     _settle(page)
     t.shot(page, '登录后回到投递页')
@@ -4100,15 +4106,18 @@ def _fill_apply_form(t, page):
     if not fields:
         # 没有表单还照常走完，用户会以为投出去了——宁可报错也别装成功
         t.status = 'error'
-        t.error = ('这个页面上没有找到可以填的表单。多半是还没登录'
-                   '（看上面的截图右上角是不是「登录/注册」），'
-                   '也可能这个岗位要去手机上操作。')
+        t.error = ('没有找到可识别的表单，未自动点击申请或投递按钮。'
+                   '请先登录，并提供直接填写资料的页面链接；复杂控件请手动填写。')
+        _handoff(t, page)
+        t.status = 'error'
         t.push()
         return
     t.step('识别到 %d 个填写项，开始对照你的资料' % len(fields))
 
     caps, file_fields, promise_fields = [], [], []
     seen_radio = set()
+    populated_radio = {(id(m.get('_frame')), m.get('name')) for m in fields
+                       if m['type'] == 'radio' and m.get('checked')}
     for m in fields:
         rule = _match_field(m)
         if rule == '_captcha':
@@ -4125,6 +4134,13 @@ def _fill_apply_form(t, page):
                 promise_fields.append(m)
             continue
         label = m['label'] or m['name'] or m['id'] or m['ph'] or '未命名字段'
+        if m.get('disabled'):
+            t.missing.append({'label': label, 'why': '只读或禁用，未修改'})
+            continue
+        if not t.refill and ((m['type'] != 'radio' and m.get('value')) or
+                (m['type'] == 'radio' and (id(m.get('_frame')), m.get('name')) in populated_radio)):
+            t.missing.append({'label': label, 'why': '已有内容，保留原值，请核对'})
+            continue
         # 站点噪声：搜索框（请输入职位或企业名称）、antd 隐藏控件的
         # id/name（location-fe-xxx、rc_select_x、salary_monthly）——
         # 这些不是投递表单字段，报上来只会吓到人（2026-09-20 实测国聘）
@@ -4135,7 +4151,7 @@ def _fill_apply_form(t, page):
             continue
         # 一组单选（男/女）是两个 input，但只是一个字段，别报两遍
         if m['type'] == 'radio':
-            grp = m['name'] or label
+            grp = (id(m.get('_frame')), m['name'] or label)
             if grp in seen_radio:
                 continue
             seen_radio.add(grp)
@@ -4194,7 +4210,7 @@ def _fill_apply_form(t, page):
             'promise', '这一条得你亲自同意',
             '这家单位要求勾选《诚信应聘承诺书》——内容是「你填的信息真实有效」，'
             '署名是你。我不能替你表态。同意的话我就勾上，不同意我就停在这儿。')
-        if agree and agree.lower() not in ('no', 'cancel', '0', 'false'):
+        if agree == 'yes':
             try:
                 _loc(page, promise_fields[0]).check()
                 t.filled.append({'label': '《诚信应聘承诺书》', 'value': '已勾选（经你同意）'})
@@ -4206,42 +4222,7 @@ def _fill_apply_form(t, page):
             t.missing.append({'label': '《诚信应聘承诺书》',
                               'why': '你没同意，我不替你勾——不勾就提交不了'})
 
-    t.shot(page, '填好了，提交前停一下')
-
-    # 停在这里等人确认 —— 提交是不可撤销的，落款也是本人
-    t.step('已填 %d 项，还有 %d 项需要你' % (len(t.filled), len(t.missing)))
-    tip = '上面这张图就是替你填好的样子。'
-    if t.missing:
-        tip += '还有 %d 项没完成（清单里列着），如果其中有必填的，提交会被退回来。' % len(t.missing)
-    ok = t.ask_human('confirm', '没问题的话，我替你点提交',
-                     tip + '确认无误就点「确认提交」；想自己再看一遍，点「先不提交」，'
-                           '页面会留着不动。')
-    if not ok or ok.lower() in ('no', 'cancel', '0', 'false'):
-        t.note = '已经停在提交前，没有替你提交。页面上的内容都填好了。'
-        t.step('停在提交前，没有提交')
-        t.shot(page, '停在这里')
-        return
-
-    if _click_any(page, ('提交应聘申请', '确认投递', '立即申请', '保存并提交', '提交申请',
-                         '申请该职位', '提交', '投递')):
-        t.step('点提交')
-        _settle(page, 1800)
-        t.shot(page, '提交结果')
-        after = _page_text(page)
-        m = re.search(r'回执(?:编号|号)?\s*[：:]?\s*([A-Za-z0-9\-]{4,})', after)
-        if m:
-            t.receipt = m.group(1)
-            t.step('拿到回执编号', note=t.receipt)
-            t.note = '已经替你提交了。'
-        elif re.search(r'(不能为空|请先|不正确|不对|失败|必填|请输入|请选择)', after):
-            t.step('提交被退回来了', ok=False, note='有必填项没完成')
-            t.note = '提交被退回来了——还有必填项没填，看上面的截图。'
-        else:
-            t.note = '提交了，但页面上没看到回执编号，你自己再确认一眼。'
-    else:
-        t.step('没找到提交按钮', ok=False, note='需要你手动点一下')
-        t.note = '没找到提交按钮，需要你自己点。'
-    t.push()
+    _handoff(t, page)
 
 
 def _pick_radio(page, meta, value):
@@ -4249,7 +4230,7 @@ def _pick_radio(page, meta, value):
     try:
         name = meta.get('name') or ''
         if name:
-            group = page.locator('input[type=radio][name="%s"]' % name)
+            group = meta.get('_frame', page).locator('input[type=radio][name="%s"]' % name)
             for i in range(group.count()):
                 el = group.nth(i)
                 lab = el.evaluate(

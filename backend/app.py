@@ -1202,7 +1202,12 @@ def api_autofill_start():
     # 只允许打开 http/https 页面：挡掉 file://、javascript:、data: 这类危险方案，
     # 否则等于把一个本地文件或脚本执行入口交给 Playwright 去 goto
     from urllib.parse import urlparse
-    if urlparse(url).scheme not in ('http', 'https'):
+    try:
+        parsed_url = urlparse(url)
+        valid_url = parsed_url.scheme in ('http', 'https') and bool(parsed_url.hostname) and not parsed_url.username
+    except ValueError:
+        valid_url = False
+    if not valid_url:
         return jsonify(ok=False, msg='链接必须是 http 或 https 开头的有效网址'), 400
     profile = _profile_for_autofill(data)
     if not (profile.get('name') or '').strip():
