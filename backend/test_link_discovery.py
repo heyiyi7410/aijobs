@@ -139,6 +139,48 @@ class LinkDiscoveryTests(unittest.TestCase):
                 'data_b64': 'a' * 8_000_001}).status_code, 400)
         ocr.assert_not_called()
 
+    # ---- 通用截图识字（粘贴链接旁边那个按钮）----
+
+    def test_generic_ocr_returns_text_and_accepts_bare_base64(self):
+        with patch('pytesseract.image_to_string',
+                   return_value='投递页面：https://jobs.example.com/apply/9527 截止 10 月') as ocr:
+            result = self.client.post('/api/ocr/text', json={
+                'data_b64': self.screenshot()}).get_json()
+        self.assertTrue(result['ok'])
+        self.assertIn('https://jobs.example.com/apply/9527', result['text'])
+        self.assertEqual(ocr.call_args.kwargs['lang'], 'chi_sim+eng')
+
+    def test_generic_ocr_does_not_reuse_company_wording(self):
+        # 同一次引擎失败，两个入口该给各自的措辞：企业名单那边引导去粘贴名单，
+        # 链接这边引导换一张图——把名单的话原样搬过来会让人莫名其妙。
+        import pytesseract
+        with patch('pytesseract.image_to_string', side_effect=pytesseract.TesseractNotFoundError()):
+            generic = self.client.post('/api/ocr/text', json={'data_b64': self.screenshot()}).get_json()
+            company = self.client.post('/api/jobs/ocr-screenshot', json={'data_b64': self.screenshot()}).get_json()
+        self.assertFalse(generic['ok'])
+        self.assertFalse(company['ok'])
+        self.assertNotIn('企业名单', generic['msg'])
+        self.assertIn('企业名单', company['msg'])
+        self.assertNotEqual(generic['msg'], company['msg'])
+
+    def test_generic_ocr_guards_input(self):
+        with patch('pytesseract.image_to_string') as ocr:
+            self.assertEqual(self.client.post('/api/ocr/text', json={}).status_code, 400)
+            self.assertEqual(self.client.post('/api/ocr/text', json={
+                'data_b64': 'a' * 8_000_001}).status_code, 400)
+            self.assertEqual(self.client.post('/api/ocr/text', json={
+                'data_b64': self.screenshot('GIF')}).status_code, 400)
+            for raw in ('not-base64', '', base64.b64encode(b'not-an-image').decode()):
+                self.assertFalse(self.client.post('/api/ocr/text', json={'data_b64': raw}).get_json()['ok'])
+        ocr.assert_not_called()
+
+    def test_generic_ocr_reports_when_nothing_recognised(self):
+        with patch('pytesseract.image_to_string', return_value='   '):
+            result = self.client.post('/api/ocr/text', json={
+                'data_b64': self.screenshot()}).get_json()
+        self.assertFalse(result['ok'])
+        self.assertIn('换一张', result['msg'])
+
     @unittest.skipUnless(os.environ.get('AIJOBS_LIVE_SEARCH') == '1', 'opt-in external search smoke test')
     def test_live_external_search(self):
         found = 0

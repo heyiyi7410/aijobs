@@ -662,40 +662,94 @@ def _search_external_recruitment_links(company, role):
     return results[:8], '' if not failures else '部分外网搜索未完成，已显示找到的链接'
 
 
-@app.route('/api/jobs/ocr-screenshot', methods=['POST'])
-def api_ocr_company_screenshot():
-    """只识别截图文字，不保存图片；企业名单由用户核对后再搜索。"""
+# 截图识字：图片 base64 交给 tesseract 认字（中文简体 + 英文），只认字、不落盘。
+# 两个地方用它：企业名单截图（找链接用）、粘贴链接旁的「截图识字」（认链接/文字）。
+_OCR_MAX_B64 = 8_000_000        # base64 串长度上限，约合 6 MB 原图
+_OCR_MAX_PIXELS = 12_000_000    # 1200 万像素，再大既慢又容易喂爆内存
+
+
+def _ocr_image_b64(b64):
+    """图片 base64 → 文字。返回 (text, kind)。
+
+    kind 为空＝成功；否则是个短码，交给调用方按自己的语境写人话
+    （企业名单那边说「请粘贴企业名单」，链接那边说「换一张清楚点的」）。
+    """
     import base64
     import io
-    data = request.get_json(force=True, silent=True) or {}
-    if not isinstance(data, dict) or not isinstance(data.get('data_b64'), str):
-        return jsonify(ok=False, msg='没有收到截图，请重新上传'), 400
-    b64 = data['data_b64'].split(',', 1)[-1]
-    if len(b64) > 8_000_000:
-        return jsonify(ok=False, msg='截图不能超过 5 MB'), 400
     try:
         from PIL import Image, ImageOps
         import pytesseract
     except ImportError:
-        return jsonify(ok=False, msg='服务器暂未安装图片识别组件，请直接粘贴企业名单'), 200
+        return '', 'no_module'
     try:
         raw = base64.b64decode(b64, validate=True)
         if not raw or len(raw) > 5 * 1024 * 1024:
-            raise ValueError('size')
+            return '', 'too_big'
         with Image.open(io.BytesIO(raw)) as im:
-            if im.format not in ('PNG', 'JPEG', 'WEBP') or im.width * im.height > 12_000_000:
-                return jsonify(ok=False, msg='请上传不超过 1200 万像素的 PNG、JPG 或 WebP 截图'), 400
+            if im.format not in ('PNG', 'JPEG', 'WEBP'):
+                return '', 'bad_type'
+            if im.width * im.height > _OCR_MAX_PIXELS:
+                return '', 'too_big'
             if os.environ.get('TESSERACT_CMD'):
                 pytesseract.pytesseract.tesseract_cmd = os.environ['TESSERACT_CMD']
-            text = pytesseract.image_to_string(ImageOps.exif_transpose(im).convert('RGB'),
-                                               lang='chi_sim+eng', config='--psm 6', timeout=20).strip()
+            text = pytesseract.image_to_string(
+                ImageOps.exif_transpose(im).convert('RGB'),
+                lang='chi_sim+eng', config='--psm 6', timeout=20).strip()
     except (pytesseract.TesseractNotFoundError, pytesseract.TesseractError, RuntimeError) as exc:
         app.logger.warning('截图识别失败：%s', exc)
-        return jsonify(ok=False, msg='服务器暂时无法识别截图，请直接粘贴企业名单'), 200
+        return '', 'ocr_fail'
     except Exception as exc:  # noqa: BLE001
         app.logger.warning('截图读取失败：%s', exc)
-        return jsonify(ok=False, msg='截图读取失败，请上传 PNG、JPG 或 WebP 图片'), 200
-    return jsonify(ok=bool(text), text=text, msg='' if text else '没有识别到文字，请直接粘贴企业名单')
+        return '', 'bad_image'
+    return text, '' if text else 'no_text'
+
+
+@app.route('/api/jobs/ocr-screenshot', methods=['POST'])
+def api_ocr_company_screenshot():
+    """只识别截图文字，不保存图片；企业名单由用户核对后再搜索。"""
+    data = request.get_json(force=True, silent=True) or {}
+    if not isinstance(data, dict) or not isinstance(data.get('data_b64'), str):
+        return jsonify(ok=False, msg='没有收到截图，请重新上传'), 400
+    b64 = data['data_b64'].split(',', 1)[-1]
+    if len(b64) > _OCR_MAX_B64:
+        return jsonify(ok=False, msg='截图不能超过 5 MB'), 400
+    text, kind = _ocr_image_b64(b64)
+    if kind == 'no_module':
+        return jsonify(ok=False, msg='服务器暂未安装图片识别组件，请直接粘贴企业名单'), 200
+    if kind == 'ocr_fail':
+        return jsonify(ok=False, msg='服务器暂时无法识别截图，请直接粘贴企业名单'), 200
+    if kind in ('bad_image', 'bad_type', 'too_big'):
+        return jsonify(ok=False, msg='请上传不超过 1200 万像素的 PNG、JPG 或 WebP 截图'), 400
+    if kind == 'no_text':
+        return jsonify(ok=False, text='', msg='没有识别到文字，请直接粘贴企业名单')
+    return jsonify(ok=True, text=text, msg='')
+
+
+@app.route('/api/ocr/text', methods=['POST'])
+def api_ocr_text():
+    """通用截图识字：图进、字出，不保存图片。
+
+    用在「粘贴链接」旁边——链接、企业名、岗位要求常常只在截图里，
+    手机截图发过来没法选中复制，这里认一遍就直接能用了。
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not isinstance(data, dict) or not isinstance(data.get('data_b64'), str):
+        return jsonify(ok=False, msg='没有收到图片，请重新粘贴或选择一张'), 400
+    b64 = data['data_b64'].split(',', 1)[-1]
+    if len(b64) > _OCR_MAX_B64:
+        return jsonify(ok=False, msg='图片太大了（超过 5 MB），截小一点再试'), 400
+    text, kind = _ocr_image_b64(b64)
+    if kind == 'no_module':
+        return jsonify(ok=False, msg='服务器暂未安装图片识别组件，请直接手动输入'), 200
+    if kind == 'ocr_fail':
+        return jsonify(ok=False, msg='这张图没识别成功，换一张清楚点的再试'), 200
+    if kind in ('bad_image', 'bad_type'):
+        return jsonify(ok=False, msg='只认 PNG、JPG、WebP 这几种图片'), 400
+    if kind == 'too_big':
+        return jsonify(ok=False, msg='图片太大了，截小一点再试'), 400
+    if kind == 'no_text':
+        return jsonify(ok=False, text='', msg='没认出文字——图可能太空、太小或太糊，换一张试试')
+    return jsonify(ok=True, text=text, msg='')
 
 
 @app.route('/api/jobs/company', methods=['POST'])
