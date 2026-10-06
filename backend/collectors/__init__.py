@@ -15,6 +15,7 @@ import time
 import concurrent.futures as _cf
 
 from .api import HttpCollector, JsonFileCollector
+from .gwy_public import GwyPublicCollector
 from .foreign import ForeignCollector
 from .gov_soe import GovSoeCollector, PROVINCE_CITIES
 from .guopin import GuopinCollector
@@ -50,7 +51,7 @@ NATIONAL_WORDS = ('全国', '全国范围', '全国各地', '不限城市', '不
 # 真实数据源：按优先级排列
 LIVE_COLLECTORS = [GuopinCollector(), MohrssCollector(), GovSoeCollector(),
                    ForeignCollector(), JobOnlineCollector(),
-                   JsonFileCollector(), HttpCollector()]
+                   JsonFileCollector(), HttpCollector(), GwyPublicCollector()]
 # 兜底源：只有真实源全军覆没时才启用
 FALLBACK_COLLECTORS = [SampleCollector()]
 

@@ -122,6 +122,24 @@ if _JOBS_CACHE_ON and _LIVE_COLLECT_ON:
     threading.Thread(target=_background_refresh, daemon=True,
                      name='jobs-cache-refresh').start()
 
+def _background_gwy_refresh():
+    from sync_gwy_public import refresh_if_due
+    time.sleep(5)
+    while True:
+        try:
+            if refresh_if_due():
+                print('[gwy-public] public announcements refreshed', flush=True)
+        except Exception as error:
+            print('[gwy-public] refresh failed: %s' % error, flush=True)
+        time.sleep(_REFRESH_INTERVAL)
+
+
+# Keep global offline mode, but allow this public source to be enabled alone.
+if _JOBS_CACHE_ON and os.environ.get(
+        'WEBAPP_GWY_PUBLIC_REFRESH', '1' if _LIVE_COLLECT_ON else '0') == '1':
+    threading.Thread(target=_background_gwy_refresh, daemon=True,
+                     name='gwy-public-refresh').start()
+
 app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading', logger=False, engineio_logger=False)
