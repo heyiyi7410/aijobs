@@ -120,7 +120,7 @@ class LinkDiscoveryTests(unittest.TestCase):
         self.assertTrue(result['ok'])
         self.assertIn('托管老师', result['text'])
         self.assertEqual(ocr.call_args.kwargs['lang'], 'chi_sim+eng')
-        self.assertEqual(ocr.call_args.kwargs['timeout'], 20)
+        self.assertEqual(ocr.call_args.kwargs['timeout'], web._OCR_TRY_SECONDS)
 
     def test_missing_ocr_engine_has_paste_text_recovery(self):
         import pytesseract
@@ -180,6 +180,26 @@ class LinkDiscoveryTests(unittest.TestCase):
                 'data_b64': self.screenshot()}).get_json()
         self.assertFalse(result['ok'])
         self.assertIn('换一张', result['msg'])
+
+    # ---- 预处理：深色底截图不能直接喂给 tesseract ----
+
+    def test_binarize_turns_colored_screenshot_into_pure_black_and_white(self):
+        # 彩色底截图直接喂 tesseract 会把中文认成乱码（实测深蓝底「投递页面链接」
+        # →「$258 TUM HEHE」），靠的就是这一步把它压成纯黑白、去掉底色干扰。
+        # 注意：二值化只做阈值，不翻转极性（深色底出来仍是白字黑底，tesseract 照样认）。
+        from PIL import Image, ImageDraw
+        im = Image.new('RGB', (320, 80), '#0b4f6c')
+        ImageDraw.Draw(im).text((10, 24), '投递页面', fill='white')
+        hist = web._ocr_binarize(im).convert('L').histogram()
+        self.assertEqual([i for i, n in enumerate(hist) if n], [0, 255],
+                         '二值化后只该剩纯黑与纯白两色')
+
+    def test_binarize_upscales_small_but_leaves_big_alone(self):
+        # 小字必须放大才认得准；大图不能再放大，否则噪声图会让 tesseract 跑飞（实测 18.6s）。
+        from PIL import Image
+        self.assertGreater(web._ocr_binarize(Image.new('RGB', (400, 60), 'white')).width, 400)
+        self.assertEqual(web._ocr_binarize(Image.new('RGB', (2400, 600), 'white')).size,
+                         (2400, 600))
 
     @unittest.skipUnless(os.environ.get('AIJOBS_LIVE_SEARCH') == '1', 'opt-in external search smoke test')
     def test_live_external_search(self):

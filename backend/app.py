@@ -666,6 +666,75 @@ def _search_external_recruitment_links(company, role):
 # 两个地方用它：企业名单截图（找链接用）、粘贴链接旁的「截图识字」（认链接/文字）。
 _OCR_MAX_B64 = 8_000_000        # base64 串长度上限，约合 6 MB 原图
 _OCR_MAX_PIXELS = 12_000_000    # 1200 万像素，再大既慢又容易喂爆内存
+_OCR_TRY_SECONDS = 8            # 单次识别最多等 8 秒，超时就别再耗着
+_OCR_UPSCALE_TO = 1400          # 小图放大到这个宽度：tesseract 在字高约 30px 时最准
+_OCR_UPSCALE_CAP = 2.5          # 放大倍数上限，见 _ocr_binarize 里的说明
+_OCR_UPSCALE_MAX_PIXELS = 4_000_000
+
+
+def _otsu_threshold(gray):
+    """大津法自动找阈值，把灰度图压成纯黑白（不需要 numpy）。"""
+    hist = gray.histogram()
+    total = sum(hist)
+    if not total:
+        return gray
+    sum_all = sum(i * hist[i] for i in range(256))
+    sum_b = 0.0
+    w_b = 0.0
+    best, thr = -1.0, 160
+    for t in range(256):
+        w_b += hist[t]
+        if not w_b:
+            continue
+        w_f = total - w_b
+        if not w_f:
+            break
+        sum_b += t * hist[t]
+        between = w_b * w_f * (sum_b / w_b - (sum_all - sum_b) / w_f) ** 2
+        if between > best:
+            best, thr = between, t
+    return gray.point(lambda p: 0 if p <= thr else 255)
+
+
+def _ocr_binarize(im):
+    """灰度 → 自动对比度 → 小图放大 → 二值化。这一步别省，也别放大过头：
+
+    省了它，深色底/彩色底的白字会被认成乱码——实测深蓝底那张的「投递页面链接」
+    被认成「$258 TUM HEHE」，12px 的小字也会被认错；二值化后两类都恢复正常。
+    放大过头则相反：噪声多的图会让 tesseract 单次跑到 8 秒以上（实测 18.6s），
+    所以放大封顶 2.5 倍，并限制放大后的总像素。
+    """
+    from PIL import Image, ImageOps
+    gray = ImageOps.autocontrast(ImageOps.exif_transpose(im).convert('L'), cutoff=1)
+    w, h = gray.size
+    if w < _OCR_UPSCALE_TO:
+        k = min(_OCR_UPSCALE_CAP, float(_OCR_UPSCALE_TO) / max(w, 1))
+        nw, nh = int(w * k), int(h * k)
+        if k > 1.05 and nw * nh <= _OCR_UPSCALE_MAX_PIXELS:
+            gray = gray.resize((nw, nh), Image.LANCZOS)
+    return _otsu_threshold(gray).convert('RGB')
+
+
+def _ocr_run(src):
+    """跑一次 tesseract。返回 (text, err)，err 为空＝跑通。
+
+    err 只区分「引擎挂了」和「超时」——超时说明这张图太费解，调用方不该
+    再拿另一版图重试（大概率一样慢），直接告诉用户换一张更省事。
+    """
+    import pytesseract
+    if os.environ.get('TESSERACT_CMD'):
+        pytesseract.pytesseract.tesseract_cmd = os.environ['TESSERACT_CMD']
+    try:
+        return pytesseract.image_to_string(
+            src, lang='chi_sim+eng', config='--psm 6',
+            timeout=_OCR_TRY_SECONDS).strip(), ''
+    except (pytesseract.TesseractNotFoundError, pytesseract.TesseractError) as exc:
+        app.logger.warning('截图识别失败：%s', exc)
+        return '', 'engine'
+    except RuntimeError:
+        # pytesseract 超时抛的是 RuntimeError
+        app.logger.warning('截图识别超时（%ss）', _OCR_TRY_SECONDS)
+        return '', 'timeout'
 
 
 def _ocr_image_b64(b64):
@@ -678,7 +747,6 @@ def _ocr_image_b64(b64):
     import io
     try:
         from PIL import Image, ImageOps
-        import pytesseract
     except ImportError:
         return '', 'no_module'
     try:
@@ -690,14 +758,15 @@ def _ocr_image_b64(b64):
                 return '', 'bad_type'
             if im.width * im.height > _OCR_MAX_PIXELS:
                 return '', 'too_big'
-            if os.environ.get('TESSERACT_CMD'):
-                pytesseract.pytesseract.tesseract_cmd = os.environ['TESSERACT_CMD']
-            text = pytesseract.image_to_string(
-                ImageOps.exif_transpose(im).convert('RGB'),
-                lang='chi_sim+eng', config='--psm 6', timeout=20).strip()
-    except (pytesseract.TesseractNotFoundError, pytesseract.TesseractError, RuntimeError) as exc:
-        app.logger.warning('截图识别失败：%s', exc)
-        return '', 'ocr_fail'
+            base = ImageOps.exif_transpose(im).convert('RGB')
+        # 先用二值化图认（深色底/彩色底/小字都靠它），认不出再拿原图兜一次
+        text, err = _ocr_run(_ocr_binarize(base))
+        if err == 'engine':
+            return '', 'ocr_fail'
+        if not text and err != 'timeout':
+            text, err = _ocr_run(base)
+            if err == 'engine':
+                return '', 'ocr_fail'
     except Exception as exc:  # noqa: BLE001
         app.logger.warning('截图读取失败：%s', exc)
         return '', 'bad_image'
