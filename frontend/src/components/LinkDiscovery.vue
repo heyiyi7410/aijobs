@@ -23,7 +23,7 @@
     <p v-if="notice" class="discover-status" role="status">{{ notice }}</p>
 
     <div v-if="entries.length" class="discover-review">
-      <h3>先核对，再搜索 <small>最多 8 家；识别错误可直接修改</small></h3>
+      <h3>先核对，再搜索 <small>最多 {{ MAX_COMPANIES }} 家；识别错误可直接修改</small></h3>
       <div v-for="(entry, index) in entries" :key="index" class="discover-edit">
         <span>{{ index + 1 }}</span>
         <input v-model="entry.company" class="input" :disabled="searching" maxlength="100" :aria-label="`第 ${index + 1} 家企业`" placeholder="企业名称">
@@ -74,6 +74,7 @@ import { store } from '../store'
 
 defineEmits(['select'])
 defineProps({ fillBusy: { type: Boolean, default: false } })
+const MAX_COMPANIES = 50
 const { sourceText, entries, results, current } = toRefs(store.linkDiscovery)
 const progress = ref(0)
 const searchTotal = ref(0)
@@ -100,8 +101,8 @@ function prepare() {
     names.add(entry.company)
     return true
   })
-  entries.value = candidates.slice(0, 8)
-  if (candidates.length > 8) notice.value = `识别到 ${candidates.length} 家，先搜索前 8 家；其余企业可分批搜索。`
+  entries.value = candidates.slice(0, MAX_COMPANIES)
+  if (candidates.length > MAX_COMPANIES) notice.value = `识别到 ${candidates.length} 家，先搜索前 ${MAX_COMPANIES} 家；其余企业可分批搜索。`
   if (!entries.value.length) error.value = '请粘贴企业名单，或先上传截图识别文字'
 }
 
