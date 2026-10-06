@@ -493,6 +493,211 @@ def _company_loose(company, query):
     return True
 
 
+@app.route('/api/jobs/discover-links', methods=['POST'])
+def api_discover_company_links():
+    """从已收录的招聘岗位中找某家公司的原始招聘链接，不把来源冒充官网。"""
+    data = request.get_json(force=True, silent=True) or {}
+    if not isinstance(data, dict) or not isinstance(data.get('company'), str):
+        return jsonify(ok=False, msg='请填写企业名称'), 400
+    company = data['company'].strip()[:100]
+    role = str(data.get('role') or '').strip()[:80]
+    if len(company) < 2:
+        return jsonify(ok=False, msg='请填写至少两个字的企业名称'), 400
+    from urllib.parse import urlparse
+    cutoff = time.time() - _JOBS_TTL_DAYS * 86400
+    cached = [job for job in models.query_jobs(limit=10000)
+              if not job.get('fetched_at') or job['fetched_at'] >= cutoff]
+    jobs, _ = _filter_apply_window(cached)
+    from collectors import LIVE_COLLECTORS, FALLBACK_COLLECTORS
+    source_labels = {c.name: c.label for c in (*LIVE_COLLECTORS, *FALLBACK_COLLECTORS)}
+    hits = []
+    for job in jobs:
+        if not (_company_hit(job.get('company'), company) or
+                _company_loose(job.get('company'), company)):
+            continue
+        url = (job.get('apply_url') or job.get('url') or '').strip()
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+            continue
+        hits.append({
+            'title': job.get('title') or '招聘信息',
+            'company': job.get('company') or company,
+            'city': job.get('city') or '',
+            'source': source_labels.get(job.get('source'), job.get('source') or '已收录招聘信息'),
+            'url': url,
+            'host': parsed.hostname or '',
+            'role_match': bool(role and role.casefold() in (job.get('title') or '').casefold()),
+        })
+    hits.sort(key=lambda item: (not item['role_match'], item['title']))
+    unique, seen = [], set()
+    for item in hits:
+        if item['url'] in seen:
+            continue
+        seen.add(item['url'])
+        unique.append(item)
+        if len(unique) >= 12:
+            break
+    scope, search_error = 'indexed_jobs', ''
+    if not unique:
+        unique, search_error = _search_external_recruitment_links(company, role)
+        scope = 'external_web'
+    return jsonify(ok=True, company=company, role=role, links=unique,
+                   count=len(unique), search_scope=scope, search_error=search_error)
+
+
+def _search_external_recruitment_links(company, role):
+    """缓存未命中时查公网；可配 Brave API，默认用公开的 DuckDuckGo 页面。"""
+    import json
+    from html.parser import HTMLParser
+    from urllib.parse import parse_qs, urlencode, urlparse
+    from urllib.request import Request, urlopen
+
+    queries = [f'"{company}" 招聘 官网']
+    if role:
+        queries.append(f'"{company}" {role} 招聘')
+    key = os.environ.get('BRAVE_SEARCH_API_KEY', '').strip()
+    found = []
+    failures = 0
+    provider = 'Brave Search' if key else 'DuckDuckGo'
+    def fetch_results(query):
+        nonlocal provider
+        if key:
+            url = 'https://api.search.brave.com/res/v1/web/search?' + urlencode(
+                {'q': query, 'count': 10, 'search_lang': 'zh-hans'})
+            req = Request(url, headers={'X-Subscription-Token': key,
+                                        'Accept': 'application/json'})
+            with urlopen(req, timeout=10) as response:
+                raw = json.loads(response.read(500_000))
+            return [(x.get('title', ''), x.get('url', ''), x.get('description', ''), provider)
+                    for x in (raw.get('web') or {}).get('results', [])]
+
+        class ResultLinks(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.items = []
+                self.active = None
+
+            def handle_starttag(self, tag, attrs):
+                if tag != 'a':
+                    return
+                attrs = dict(attrs)
+                if 'result-link' in attrs.get('class', ''):
+                    self.active = [attrs.get('href', ''), '']
+
+            def handle_data(self, data):
+                if self.active is not None:
+                    self.active[1] += data
+
+            def handle_endtag(self, tag):
+                if tag == 'a' and self.active is not None:
+                    self.items.append(self.active)
+                    self.active = None
+
+        url = 'https://lite.duckduckgo.com/lite/?' + urlencode({'q': query})
+        req = Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; AIjobs/1.0)'})
+        with urlopen(req, timeout=10) as response:
+            html = response.read(500_000).decode('utf-8', errors='replace')
+        parser = ResultLinks()
+        parser.feed(html)
+        if not parser.items and ('anomaly' in html or 'captcha' in html.lower()):
+            raise RuntimeError('search challenge')
+        return [(title, href, '', provider) for href, title in parser.items]
+
+    def bing_results(query):
+        import xml.etree.ElementTree as ET
+        url = 'https://www.bing.com/search?' + urlencode({'q': query, 'format': 'rss'})
+        req = Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; AIjobs/1.0)'})
+        with urlopen(req, timeout=10) as response:
+            root = ET.fromstring(response.read(500_000))
+        if root.tag != 'rss':
+            raise RuntimeError('search unavailable')
+        return [(item.findtext('title') or '', item.findtext('link') or '',
+                 item.findtext('description') or '', 'Bing')
+                for item in root.findall('./channel/item')]
+
+    for query in queries:
+        try:
+            found.extend(fetch_results(query))
+        except Exception as exc:  # noqa: BLE001
+            app.logger.warning('外网招聘搜索失败：%s', type(exc).__name__)
+            if not key:
+                try:
+                    found.extend(bing_results(query))
+                    continue
+                except Exception as fallback_exc:  # noqa: BLE001
+                    app.logger.warning('备用搜索失败：%s', type(fallback_exc).__name__)
+            failures += 1
+    if failures == len(queries):
+        return [], '外网搜索暂时不可用，请稍后重试或手动粘贴链接'
+
+    results, seen = [], set()
+    for title, url, snippet, result_provider in found:
+        if url.startswith('//'):
+            url = 'https:' + url
+        parsed = urlparse(url)
+        if parsed.hostname in ('duckduckgo.com', 'www.duckduckgo.com'):
+            url = parse_qs(parsed.query).get('uddg', [''])[0]
+            parsed = urlparse(url)
+        if (parsed.scheme not in ('http', 'https') or not parsed.hostname
+                or parsed.username or parsed.password or url in seen):
+            continue
+        text = f'{title} {snippet}'
+        if not (_company_hit(text, company) or company in url):
+            continue
+        seen.add(url)
+        results.append({'title': title or '招聘页面', 'company': company,
+                        'city': '', 'source': result_provider + ' · 外网结果（未核实）',
+                        'url': url, 'host': parsed.hostname, 'role_match': bool(
+                            role and role.casefold() in text.casefold())})
+    platform_hosts = ('zhipin.com', 'nowcoder.com', 'liepin.com', 'zhaopin.com',
+                      '51job.com', 'jobui.com', 'niuqizp.com', 'yingjiesheng.com')
+    def priority(item):
+        host, title = item['host'], item['title']
+        platform = any(host == h or host.endswith('.' + h) for h in platform_hosts)
+        recruiting_domain = host.startswith(('jobs.', 'job.', 'careers.', 'career.',
+                                            'hr.', 'recruit.', 'zhaopin.'))
+        official_words = bool(re.search(r'官网|官方网站|官方招聘|招聘门户|人才招聘|Careers', title, re.I))
+        return (platform, not recruiting_domain, not official_words, not item['role_match'])
+    results.sort(key=priority)
+    return results[:8], '' if not failures else '部分外网搜索未完成，已显示找到的链接'
+
+
+@app.route('/api/jobs/ocr-screenshot', methods=['POST'])
+def api_ocr_company_screenshot():
+    """只识别截图文字，不保存图片；企业名单由用户核对后再搜索。"""
+    import base64
+    import io
+    data = request.get_json(force=True, silent=True) or {}
+    if not isinstance(data, dict) or not isinstance(data.get('data_b64'), str):
+        return jsonify(ok=False, msg='没有收到截图，请重新上传'), 400
+    b64 = data['data_b64'].split(',', 1)[-1]
+    if len(b64) > 8_000_000:
+        return jsonify(ok=False, msg='截图不能超过 5 MB'), 400
+    try:
+        from PIL import Image, ImageOps
+        import pytesseract
+    except ImportError:
+        return jsonify(ok=False, msg='服务器暂未安装图片识别组件，请直接粘贴企业名单'), 200
+    try:
+        raw = base64.b64decode(b64, validate=True)
+        if not raw or len(raw) > 5 * 1024 * 1024:
+            raise ValueError('size')
+        with Image.open(io.BytesIO(raw)) as im:
+            if im.format not in ('PNG', 'JPEG', 'WEBP') or im.width * im.height > 12_000_000:
+                return jsonify(ok=False, msg='请上传不超过 1200 万像素的 PNG、JPG 或 WebP 截图'), 400
+            if os.environ.get('TESSERACT_CMD'):
+                pytesseract.pytesseract.tesseract_cmd = os.environ['TESSERACT_CMD']
+            text = pytesseract.image_to_string(ImageOps.exif_transpose(im).convert('RGB'),
+                                               lang='chi_sim+eng', config='--psm 6', timeout=20).strip()
+    except (pytesseract.TesseractNotFoundError, pytesseract.TesseractError, RuntimeError) as exc:
+        app.logger.warning('截图识别失败：%s', exc)
+        return jsonify(ok=False, msg='服务器暂时无法识别截图，请直接粘贴企业名单'), 200
+    except Exception as exc:  # noqa: BLE001
+        app.logger.warning('截图读取失败：%s', exc)
+        return jsonify(ok=False, msg='截图读取失败，请上传 PNG、JPG 或 WebP 图片'), 200
+    return jsonify(ok=bool(text), text=text, msg='' if text else '没有识别到文字，请直接粘贴企业名单')
+
+
 @app.route('/api/jobs/company', methods=['POST'])
 def api_company_search():
     """按单位名搜岗位。

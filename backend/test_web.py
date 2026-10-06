@@ -3281,7 +3281,7 @@ class TestWeb(unittest.TestCase):
                  'reference-ui.css': strip_comments(self.frontend_file('reference-ui.css')),
                  'App.vue': strip_comments(self.frontend_file('App.vue'))}
         for name in ('Step1Profile.vue', 'Step2Wish.vue', 'Step3Match.vue',
-                     'Step4Apply.vue', 'AutoFillPanel.vue', 'StepBar.vue'):
+                     'Step4Apply.vue', 'AutoFillPanel.vue', 'LinkDiscovery.vue', 'StepBar.vue'):
             files[name] = strip_comments(self.read_component(name))
 
         for name, src in files.items():

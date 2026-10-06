@@ -2,12 +2,14 @@
   <div>
     <!-- ============ 还没开始 ============ -->
     <div v-if="!taskId && !filling" class="card">
-      <h2 class="card-title">帮我自动填（测试版）</h2>
+      <h2 class="card-title">{{ customOnly ? '打开链接，自动填表' : '帮我自动填（测试版）' }}</h2>
       <p class="card-hint">
-        我会打开填写页面，尝试填入可识别的简历字段。登录、复杂控件和最终提交需要你本人操作。
+        {{ customOnly
+          ? '粘贴可信招聘网站的填写页链接，系统会尝试填入已核对的简历资料。登录、验证码和最终提交仍需本人完成。'
+          : '我会打开填写页面，尝试填入可识别的简历字段。登录、复杂控件和最终提交需要你本人操作。' }}
       </p>
 
-      <div class="af-note">
+      <div v-if="!customOnly" class="af-note">
         <b>有三件事必须你亲自来：</b><br>
         手机短信验证码、图形验证码、最后那一下「提交」。<br>
         <span class="muted">
@@ -16,7 +18,7 @@
         </span>
       </div>
 
-      <div class="af-note af-note-warn">
+      <div v-if="!customOnly" class="af-note af-note-warn">
         <b>还有几段，只有你本人能补：</b><br>
         招聘网站会把「资格证书」「家庭成员」「亲属在系统单位任职」这类段标成必填，
         内容要么是家人的隐私，要么是只有你本人能确认的事实——我填不了，也不该替你编。
@@ -28,9 +30,9 @@
         </span>
       </div>
 
-      <label class="af-label">投到哪里</label>
+      <label v-if="!customOnly" class="af-label">投到哪里</label>
 
-      <div v-if="!customUrl.trim()">
+      <div v-if="!customOnly && !customUrl.trim()">
         <p class="af-target-line" style="margin:.2rem 0 0;">
           {{ job.company }} · {{ job.title }}
         </p>
@@ -39,23 +41,32 @@
         </p>
       </div>
 
-      <div class="af-custom">
-        <label class="af-flabel">或者粘贴其他招聘网站的表单链接</label>
+      <div v-if="customOnly" class="af-custom af-custom-first">
+        <label class="af-flabel" for="step1-autofill-url">招聘网站的填写页链接</label>
         <input
+          id="step1-autofill-url"
           class="af-input"
           v-model="customUrl"
           placeholder="把招聘网站的投递页链接粘进来，例如 https://jobs.xxx.com/apply/123"
         >
-        <p class="muted" style="margin:.4rem 0 0;" v-if="!customUrl.trim()">
-          支持普通输入框、原生下拉框及 iframe 内的普通表单；复杂控件、多页流程可能需要手动处理。请使用可信网站，填写内容可能被网站自动保存。
-        </p>
-        <p class="af-warn" style="margin:.4rem 0 0;" v-else-if="!urlValid">
+        <p class="af-warn" style="margin:.4rem 0 0;" v-if="!urlValid">
           链接要以 http:// 或 https:// 开头才有效。
         </p>
         <p class="muted" style="margin:.4rem 0 0;" v-else>
-          我会打开这个链接并尝试填写，不会自动点击申请或最终提交。
+          网页可能在输入时自动保存资料；系统不会点击申请或最终提交。复杂控件仍可能需要手动填写。
         </p>
       </div>
+
+      <div v-if="customOnly" class="af-review-fields">
+        <p>填表将使用以下资料，请先与简历核对；不对的可在本页“基本信息”中修改。</p>
+        <div><span>姓名</span><b>{{ store.profile.name || '未填写' }}</b></div>
+        <div><span>手机号</span><b>{{ store.profile.phone || '未填写' }}</b></div>
+        <div><span>邮箱</span><b>{{ store.profile.email || '未填写' }}</b></div>
+      </div>
+      <label v-if="customOnly" class="af-chk">
+        <input type="checkbox" v-model="profileConfirmed">
+        我已核对以上资料，并了解招聘网站可能自动保存填入内容
+      </label>
 
       <label class="af-chk">
         <input type="checkbox" v-model="showBrowser">
@@ -71,7 +82,7 @@
         适合反复试跑流程；只想补缺的段就别勾。
       </p>
 
-      <button class="btn btn-primary btn-big" style="margin-top:1rem;" @click="start">
+      <button class="btn btn-primary btn-big" style="margin-top:1rem;" :disabled="starting" @click="start">
         开始自动填
       </button>
       <p v-if="err" class="af-err">{{ err }}</p>
@@ -229,16 +240,18 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { store, profilePayload } from '../store'
 import { api } from '../api'
 
 const props = defineProps({
   job: { type: Object, default: () => ({}) },
+  customOnly: { type: Boolean, default: false },
+  initialUrl: { type: String, default: '' },
   // 该岗位「按岗位定制简历」生成的专版 docx（含 path/name）。有就优先当附件投出去。
   tailored: { type: Object, default: null },
 })
-const emit = defineEmits(['done'])
+const emit = defineEmits(['done', 'busy'])
 
 const showBrowser = ref(false)
 const refill = ref(false)
@@ -249,6 +262,12 @@ const t = ref({ steps: [], shots: [], filled: [], missing: [] })
 const filling = ref(false)   // 正在补资料
 const skipped = ref(false)   // 用户选了「先空着，照样投」
 const starting = ref(false)  // 正在提交启动请求（挡住重复点击）
+const activeTask = computed(() => starting.value || (taskId.value && !['done', 'error'].includes(t.value.status)))
+watch(activeTask, value => emit('busy', Boolean(value)), { immediate: true })
+const profileConfirmed = ref(false)
+watch(() => [store.profile.name, store.profile.phone, store.profile.email], () => {
+  profileConfirmed.value = false
+})
 
 // 招聘表必问的几项。空着就会在结果里变成「要你自己来的（N 项）」——
 // 而那张列表以前只是给人看、没有地方填，等于把人卡死在最后一步。
@@ -279,7 +298,12 @@ const fillFields = computed(() =>
 )
 
 // 投递目标：用户粘贴的自定义链接优先；否则用当前岗位自己的投递页
-const customUrl = ref('')
+const customUrl = ref(props.initialUrl)
+watch(() => props.initialUrl, value => {
+  if (activeTask.value) return
+  reset()
+  customUrl.value = value || ''
+})
 const urlValid = computed(() => {
   const c = (customUrl.value || '').trim()
   if (!c) return true
@@ -288,6 +312,7 @@ const urlValid = computed(() => {
 const targetUrl = computed(() => {
   const c = (customUrl.value || '').trim()
   if (c) return c
+  if (props.customOnly) return ''
   const j = props.job || {}
   return j.apply_url || j.url || ''
 })
@@ -338,11 +363,19 @@ function startPoll() {
 
 async function start() {
   err.value = ''
+  if (props.customOnly && !customUrl.value.trim()) {
+    err.value = '请先粘贴招聘网站的填写页链接'
+    return
+  }
   if (customUrl.value.trim() && !urlValid.value) {
     err.value = '链接要以 http:// 或 https:// 开头'
     return
   }
   if (!targetUrl.value) { err.value = '这个岗位没有可投的页面'; return }
+  if (props.customOnly && !profileConfirmed.value) {
+    err.value = '请先核对姓名、手机号和邮箱，并勾选确认'
+    return
+  }
   // 有空的就先让他补——这是自动投之前唯一一次能顺畅补资料的机会。
   // 进补填页前把缺的字段快照下来（见 fillFields 上的注释）。
   if (gaps.value.length && !skipped.value) {
@@ -366,6 +399,13 @@ function skipGaps() {
 
 async function doStart() {
   if (starting.value) return
+  if (props.customOnly) {
+    const p = store.profile
+    if (!p.name.trim()) return (err.value = '请先填写并核对姓名')
+    if (!/^1\d{10}$/.test(p.phone.trim())) return (err.value = '请先填写正确的 11 位手机号')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim()))
+      return (err.value = '请先填写正确的邮箱')
+  }
   starting.value = true
   try {
     // 补的资料必须落库：自动投优先读数据库里的那份，不存等于白补。
@@ -381,7 +421,7 @@ async function doStart() {
     r = await api.autofillStart({
       profile_id: store.profileId,
       profile: store.profile,
-      job: props.job,
+      job: props.customOnly ? {} : props.job,
       url: targetUrl.value,
       show_browser: showBrowser.value,
       refill: refill.value,
@@ -442,7 +482,8 @@ function reset() {
   filling.value = false
   gapKeys.value = []
   skipped.value = false
-  customUrl.value = ''
+  customUrl.value = props.initialUrl || ''
+  profileConfirmed.value = false
 }
 
 onUnmounted(() => { if (timer) clearInterval(timer) })
@@ -451,7 +492,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 <style scoped>
 .af-note {
   background: var(--surface-2);
-  border-left: 4px solid var(--primary);
+  border: 1px solid var(--line);
   border-radius: .6rem;
   padding: .9rem 1rem;
   margin: .9rem 0;
@@ -459,7 +500,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 }
 .af-note-warn {
   background: var(--warn-1);
-  border-left-color: var(--warn);
+  border-color: var(--warn-1);
 }
 /* 站点标红段的清单：为什么不能替你补 + 怎么补最快 */
 .af-blockers {
@@ -513,6 +554,11 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 }
 .af-warn { color: var(--danger); font-size: .92rem; }
 .af-custom { margin-top: 1rem; border-top: 1px dashed var(--line); padding-top: .9rem; }
+.af-custom-first { border-top: 0; padding-top: 0; }
+.af-review-fields { margin-top: .9rem; padding: .75rem; border-radius: .6rem; background: var(--surface-2); }
+.af-review-fields p { margin: 0 0 .5rem; font-size: .92rem; color: var(--ink-2); }
+.af-review-fields div { display: flex; gap: .7rem; justify-content: space-between; padding-block: .25rem; }
+.af-review-fields b { overflow-wrap: anywhere; min-width: 0; text-align: right; }
 .af-field { margin-top: 1rem; }
 .af-gp-tag {
   display: inline-block; margin-left: .5rem; font-size: .72rem; font-weight: 700;

@@ -90,6 +90,35 @@
         </details>
       </div>
 
+    <div v-if="p.resume_path || got.length" class="card quick-fill-card">
+      <div class="card-head">
+        <span class="tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.2 1.2" />
+            <path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.2-1.2" />
+          </svg>
+        </span>
+      <h2 class="card-title">找招聘链接，直接填表</h2>
+      </div>
+      <p class="card-hint">已有填写页链接可直接粘贴；只有企业名单或截图，也可以先在下方逐家找链接。</p>
+      <div class="quick-fill-actions">
+      <button class="btn btn-primary quick-fill-toggle" :aria-expanded="showCustomAutofill"
+        @click="showCustomAutofill = !showCustomAutofill">
+        {{ showCustomAutofill ? '收起自定义填表' : '粘贴链接，开始填表' }}
+      </button>
+      <button class="btn quick-fill-toggle" :aria-expanded="showLinkDiscovery"
+        @click="showLinkDiscovery = !showLinkDiscovery">
+        {{ showLinkDiscovery ? '收起企业搜索' : '企业名单 / 截图找链接' }}
+      </button>
+      </div>
+      <p v-if="customFillBusy" class="card-hint" role="status">当前链接正在填表，完成后可以选择下一家。</p>
+    </div>
+    <LinkDiscovery v-if="p.resume_path || got.length" v-show="showLinkDiscovery"
+      :fill-busy="customFillBusy" @select="selectDiscoveredUrl" />
+    <AutoFillPanel v-if="p.resume_path || got.length" v-show="showCustomAutofill"
+      custom-only :initial-url="store.linkDiscovery.selectedUrl" @busy="customFillBusy = $event" />
+
     <div class="card basic-card">
       <div class="card-head">
         <span class="tile" aria-hidden="true">
@@ -397,6 +426,8 @@ import { CITIES, EDUS, EXPS, SKILLS, MARITALS, EDU_REGULARS, EDU_FORMS,
   HEALTHS } from '../options'
 import { api } from '../api'
 import { canRecord, record, stopRecord } from '../useSpeech'
+import AutoFillPanel from './AutoFillPanel.vue'
+import LinkDiscovery from './LinkDiscovery.vue'
 
 const p = store.profile
 const canRec = canRecord()
@@ -428,6 +459,16 @@ const SEXES = ['男', '女']
 const fileEl = ref(null)
 const busy = ref(false)
 const keepResume = ref(true)   // 留着原件，自动投才能上传真正的简历（带照片排版）
+const showCustomAutofill = ref(false)
+const showLinkDiscovery = ref(false)
+const customFillBusy = ref(false)
+async function selectDiscoveredUrl(url) {
+  if (customFillBusy.value) return
+  store.linkDiscovery.selectedUrl = url
+  showCustomAutofill.value = true
+  await nextTick()
+  document.getElementById('step1-autofill-url')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
 const msg = ref('')
 const err = ref('')
 const isWarn = ref(false)   // 这句话是提醒（不是简历），不是「读好了」
@@ -627,6 +668,9 @@ onUnmounted(stopMic)
 </script>
 
 <style scoped>
+.quick-fill-card { margin-top: 1rem; }
+.quick-fill-toggle { min-height: 2.75rem; margin-top: .35rem; }
+.quick-fill-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 /* 上传区：浅蓝底 + 蓝虚线框（效果图的拖放区） */
 .up-box {
   background: var(--surface-2);

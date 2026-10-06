@@ -59,6 +59,31 @@ python -m unittest test_autofill_browser -v
 
 ### 第 1 步的「传简历自动填」
 
+上传并核对简历后，第 1 步会出现“找招聘链接，直接填表”。已有招聘填写页链接可直接粘贴；
+企业名单可按每行 `企业名称 | 岗位关键词` 粘贴，也可上传或粘贴 PNG/JPG/WebP 截图。
+截图识别后先核对、修改企业名称，再逐家搜索（每批最多 8 家）。搜索结果和名单会保留在本机，返回后可继续查看。
+
+每家企业先查本站已收录且未过期的岗位，没有可用链接时自动搜索外网，
+以招聘域名和官网相关标题优先排序。外网候选仅来自搜索引擎，不能据此保证是该企业官网；
+结果会显示来源、域名及“打开核对”和“用此链接填表”。点击填表后会带入链接，核对资料后才启动。
+招聘公告或首页可能没有可填表单，需进入实际填写页后再粘贴该页链接。
+
+外网搜索默认使用 DuckDuckGo 公开页面，遇到访问错误或验证码时尝试 Bing 备用通道
+（服务端需能访问外网，公开通道仍可能限流或返回无匹配结果）；
+生产环境可设置 `BRAVE_SEARCH_API_KEY` 使用 [Brave Search API](https://api-dashboard.search.brave.com/documentation)。
+密钥只在服务器读取，不传给浏览器。搜索只发送企业名和岗位词，不发送简历资料。
+搜索失败时显示恢复提示，并可手动继续搜索或粘贴链接。
+
+截图识别需要后端依赖中的 Pillow、pytesseract，以及系统 Tesseract 中文和英文模型。
+Linux 安装示例：`apt-get install -y tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng`。
+Windows 可通过环境变量 `TESSERACT_CMD` 指定 `tesseract.exe` 完整路径。截图最大 5 MB、1200 万像素，服务器不保存截图。
+未安装识别引擎时，文字粘贴和链接搜索仍可用。
+
+离线验证：`cd backend && python -m unittest test_link_discovery -v`。
+浏览器流程验证：设置 `AIJOBS_DISCOVERY_E2E=1` 后运行 `python -m unittest test_link_discovery_browser -v`；
+使用隔离数据和模拟的搜索/OCR/填表任务，不向真实企业提交。外网只读验证可设置
+`AIJOBS_LIVE_SEARCH=1` 后运行 `python -m unittest test_link_discovery.LinkDiscoveryTests.test_live_external_search -v`。
+
 目标用户不常用电脑，让他们把姓名/电话/邮箱/学历/技能手打一遍是很高的门槛；
 但大部分人手里其实已经有一份现成的简历。所以第 1 步的入口是「有简历就传上来」。
 

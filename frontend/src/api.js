@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client'
 import { getAuthHeader } from './store'
 
-async function req(url, body) {
+async function req(url, body, signal) {
   const headers = { ...getAuthHeader() }
   let opt
   if (body) {
@@ -10,7 +10,7 @@ async function req(url, body) {
   } else {
     opt = { method: 'GET', headers }
   }
-  const r = await fetch(url, opt)
+  const r = await fetch(url, { ...opt, signal })
   return await r.json()
 }
 
@@ -25,6 +25,10 @@ export const api = {
   // 按单位名搜岗位：求职者认准某一家单位时直接敲名字搜
   searchCompany: (company, p, profileId, city) =>
     req('/api/jobs/company', { company, profile: p, profile_id: profileId, city }),
+  discoverCompanyLinks: (company, role, signal) =>
+    req('/api/jobs/discover-links', { company, role }, signal),
+  ocrCompanyScreenshot: data_b64 =>
+    req('/api/jobs/ocr-screenshot', { data_b64 }),
   apply: (profileId, jobs, channel, profile, extra) =>
     req('/api/apply', { profile_id: profileId, jobs, channel, profile, ...(extra || {}) }),
   // 大模型配置（按岗位定制简历用）：base_url / api_key / model / enabled
