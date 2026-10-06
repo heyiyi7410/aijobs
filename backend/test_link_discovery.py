@@ -17,6 +17,22 @@ with patch.object(models, 'init_db', lambda *_: _init_db(os.path.join(TEMP.name,
     import app as web
 
 
+# 云 OCR 在测试里必须是死的。本地 tesseract 一交白卷就会走云兜底，
+# 不打桩的话每个「没认出来」的用例都会真的去连腾讯云（慢，还吃调用量）。
+# 要测云自己，就在用例里再 patch 一次把它打开。
+_CLOUD_PATCH = None
+
+
+def setUpModule():
+    global _CLOUD_PATCH
+    _CLOUD_PATCH = patch('tcloud_ocr.recognize', return_value=('', 'no_cred'))
+    _CLOUD_PATCH.start()
+
+
+def tearDownModule():
+    _CLOUD_PATCH.stop()
+
+
 class LinkDiscoveryTests(unittest.TestCase):
     def setUp(self):
         self.client = web.app.test_client()
@@ -180,6 +196,64 @@ class LinkDiscoveryTests(unittest.TestCase):
                 'data_b64': self.screenshot()}).get_json()
         self.assertFalse(result['ok'])
         self.assertIn('换一张', result['msg'])
+
+    # ---- 腾讯云高精度 OCR：本地优先、认不出才上云 ----
+
+    def test_local_engine_answers_without_spending_a_cloud_call(self):
+        # 这条是省钱的那道闸：本地认出来了就绝不该再调云（云是按次计费的）。
+        with patch('pytesseract.image_to_string', return_value='投递页面链接'), \
+                patch('tcloud_ocr.recognize') as cloud:
+            result = self.client.post('/api/ocr/text', json={
+                'data_b64': self.screenshot()}).get_json()
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['engine'], 'tesseract')
+        cloud.assert_not_called()
+
+    def test_cloud_takes_over_when_local_finds_nothing(self):
+        with patch('pytesseract.image_to_string', return_value='   '), \
+                patch('tcloud_ocr.recognize',
+                      return_value=('投递页面：https://jobs.example.com/apply/9527', '')):
+            result = self.client.post('/api/ocr/text', json={
+                'data_b64': self.screenshot()}).get_json()
+        self.assertTrue(result['ok'])
+        self.assertIn('https://jobs.example.com/apply/9527', result['text'])
+        self.assertEqual(result['engine'], 'tcloud', '出字的引擎要标清楚，别让人误以为是本地认的')
+
+    def test_cloud_takes_over_when_local_engine_is_missing(self):
+        # 服务器没装 tesseract 时，云是唯一一条路——不能跟着本地一起死。
+        import pytesseract
+        with patch('pytesseract.image_to_string', side_effect=pytesseract.TesseractNotFoundError()), \
+                patch('tcloud_ocr.recognize', return_value=('示例科技有限公司', '')):
+            result = self.client.post('/api/jobs/ocr-screenshot', json={
+                'data_b64': self.screenshot()}).get_json()
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['engine'], 'tcloud')
+
+    def test_cloud_without_credentials_still_speaks_in_its_own_wording(self):
+        # 云没配好是配置问题，不是图的问题——两个入口仍要给各自的人话，
+        # 不能因为换了个失败原因就把「没认出来」说成别的东西。
+        with patch('pytesseract.image_to_string', return_value='   '), \
+                patch('tcloud_ocr.recognize', return_value=('', 'no_cred')):
+            generic = self.client.post('/api/ocr/text', json={
+                'data_b64': self.screenshot()}).get_json()
+            company = self.client.post('/api/jobs/ocr-screenshot', json={
+                'data_b64': self.screenshot()}).get_json()
+        self.assertFalse(generic['ok'])
+        self.assertFalse(company['ok'])
+        self.assertNotIn('企业名单', generic['msg'])
+        self.assertIn('企业名单', company['msg'])
+
+    def test_ocr_status_reports_both_engines(self):
+        with patch('tcloud_ocr.is_configured', return_value=True):
+            status = self.client.get('/api/ocr/status').get_json()
+        self.assertTrue(status['ok'])
+        self.assertTrue(status['cloud'])
+        self.assertIsInstance(status['local'], bool)
+
+    def test_cloud_recognise_says_no_cred_instead_of_calling_out(self):
+        import tcloud_ocr
+        with patch.object(tcloud_ocr, '_credential', return_value=('', '', '')):
+            self.assertEqual(tcloud_ocr.recognize('aaaa'), ('', 'no_cred'))
 
     # ---- 预处理：深色底截图不能直接喂给 tesseract ----
 

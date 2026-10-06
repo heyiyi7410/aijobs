@@ -22,6 +22,7 @@ import mailer
 import autofill
 import tailor
 import resume_parser
+import tcloud_ocr
 from ai_matcher import match_jobs, search_words, intent_labels
 from collectors import (collect_jobs, collect_jobs_with_report, NATURES,
                         DEFAULT_NATURES, _city_scope)
@@ -737,40 +738,61 @@ def _ocr_run(src):
         return '', 'timeout'
 
 
+# 出字的引擎标识，随识别结果一起返回，方便一眼看出这回走的是哪条路
+OCR_ENGINE_LOCAL = 'tesseract'
+OCR_ENGINE_CLOUD = 'tcloud'
+
+
 def _ocr_image_b64(b64):
-    """图片 base64 → 文字。返回 (text, kind)。
+    """图片 base64 → 文字。返回 (text, kind, engine)。
+
+    顺序是「本地 tesseract 先跑，认不出才上云」：
+      - 本地不花钱、不联网，正常场景（白底印刷体）它就够用；
+      - 腾讯云高精度版只在本地交白卷时才调，它在手写体、小字、模糊字、
+        倾斜文本上比本地强，而这四类正是 tesseract 的死角（见 SKILL 第 12 节）；
+      - 云也没配密钥 / 也没认出，才算这张图没认出来。
 
     kind 为空＝成功；否则是个短码，交给调用方按自己的语境写人话
     （企业名单那边说「请粘贴企业名单」，链接那边说「换一张清楚点的」）。
+    云侧新增的短码：no_cred 没配密钥 / auth 密钥或权限不对 / fail 这次没调通。
     """
     import base64
     import io
     try:
         from PIL import Image, ImageOps
     except ImportError:
-        return '', 'no_module'
+        # 连 PIL 都没有，本地这条彻底走不通，直接上云（云自己认图片，不依赖 PIL）
+        text, kind = tcloud_ocr.recognize(b64)
+        return text, kind, OCR_ENGINE_CLOUD
     try:
         raw = base64.b64decode(b64, validate=True)
         if not raw or len(raw) > 5 * 1024 * 1024:
-            return '', 'too_big'
+            return '', 'too_big', ''
         with Image.open(io.BytesIO(raw)) as im:
             if im.format not in ('PNG', 'JPEG', 'WEBP'):
-                return '', 'bad_type'
+                return '', 'bad_type', ''
             if im.width * im.height > _OCR_MAX_PIXELS:
-                return '', 'too_big'
+                return '', 'too_big', ''
             base = ImageOps.exif_transpose(im).convert('RGB')
         # 先用二值化图认（深色底/彩色底/小字都靠它），认不出再拿原图兜一次
         text, err = _ocr_run(_ocr_binarize(base))
         if err == 'engine':
-            return '', 'ocr_fail'
-        if not text and err != 'timeout':
+            text = ''          # 引擎没装，别再拿原图撞一次，直接交给云
+        elif not text and err != 'timeout':
             text, err = _ocr_run(base)
             if err == 'engine':
-                return '', 'ocr_fail'
+                text = ''
+        if text:
+            return text, '', OCR_ENGINE_LOCAL
     except Exception as exc:  # noqa: BLE001
         app.logger.warning('截图读取失败：%s', exc)
-        return '', 'bad_image'
-    return text, '' if text else 'no_text'
+        return '', 'bad_image', ''
+
+    # 本地交白卷（或压根没装）→ 腾讯云高精度版兜底
+    text, kind = tcloud_ocr.recognize(b64)
+    if kind and kind != 'no_text':
+        app.logger.warning('腾讯云 OCR 未出字：%s', kind)
+    return text, ('' if text else (kind or 'no_text')), OCR_ENGINE_CLOUD
 
 
 @app.route('/api/jobs/ocr-screenshot', methods=['POST'])
@@ -782,16 +804,19 @@ def api_ocr_company_screenshot():
     b64 = data['data_b64'].split(',', 1)[-1]
     if len(b64) > _OCR_MAX_B64:
         return jsonify(ok=False, msg='截图不能超过 5 MB'), 400
-    text, kind = _ocr_image_b64(b64)
+    text, kind, engine = _ocr_image_b64(b64)
     if kind == 'no_module':
         return jsonify(ok=False, msg='服务器暂未安装图片识别组件，请直接粘贴企业名单'), 200
-    if kind == 'ocr_fail':
-        return jsonify(ok=False, msg='服务器暂时无法识别截图，请直接粘贴企业名单'), 200
+    if kind in ('no_cred', 'auth', 'fail'):
+        # 本地没认出、云也没调通：这是配置/网络问题，不是图的问题，别让用户换图
+        return jsonify(ok=False, engine=engine,
+                       msg='服务器暂时无法识别截图，请直接粘贴企业名单'), 200
     if kind in ('bad_image', 'bad_type', 'too_big'):
         return jsonify(ok=False, msg='请上传不超过 1200 万像素的 PNG、JPG 或 WebP 截图'), 400
-    if kind == 'no_text':
-        return jsonify(ok=False, text='', msg='没有识别到文字，请直接粘贴企业名单')
-    return jsonify(ok=True, text=text, msg='')
+    if kind:
+        return jsonify(ok=False, text='', engine=engine,
+                       msg='没有识别到文字，请直接粘贴企业名单')
+    return jsonify(ok=True, text=text, msg='', engine=engine)
 
 
 @app.route('/api/ocr/text', methods=['POST'])
@@ -807,18 +832,31 @@ def api_ocr_text():
     b64 = data['data_b64'].split(',', 1)[-1]
     if len(b64) > _OCR_MAX_B64:
         return jsonify(ok=False, msg='图片太大了（超过 5 MB），截小一点再试'), 400
-    text, kind = _ocr_image_b64(b64)
+    text, kind, engine = _ocr_image_b64(b64)
     if kind == 'no_module':
         return jsonify(ok=False, msg='服务器暂未安装图片识别组件，请直接手动输入'), 200
-    if kind == 'ocr_fail':
-        return jsonify(ok=False, msg='这张图没识别成功，换一张清楚点的再试'), 200
+    if kind in ('no_cred', 'auth', 'fail'):
+        return jsonify(ok=False, engine=engine,
+                       msg='这张图没识别成功，换一张清楚点的再试'), 200
     if kind in ('bad_image', 'bad_type'):
         return jsonify(ok=False, msg='只认 PNG、JPG、WebP 这几种图片'), 400
     if kind == 'too_big':
         return jsonify(ok=False, msg='图片太大了，截小一点再试'), 400
-    if kind == 'no_text':
-        return jsonify(ok=False, text='', msg='没认出文字——图可能太空、太小或太糊，换一张试试')
-    return jsonify(ok=True, text=text, msg='')
+    if kind:
+        return jsonify(ok=False, text='', engine=engine,
+                       msg='没认出文字——图可能太空、太小或太糊，换一张试试')
+    return jsonify(ok=True, text=text, msg='', engine=engine)
+
+
+@app.route('/api/ocr/status', methods=['GET'])
+def api_ocr_status():
+    """截图识字现在靠什么在跑。排查用：云没配好时这里一眼能看出来。"""
+    local = True
+    try:
+        import pytesseract  # noqa: F401
+    except ImportError:
+        local = False
+    return jsonify(ok=True, local=local, cloud=tcloud_ocr.is_configured())
 
 
 @app.route('/api/jobs/company', methods=['POST'])
