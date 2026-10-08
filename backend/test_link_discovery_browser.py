@@ -1,7 +1,7 @@
 """Opt-in real UI integration with synthetic companies and isolated API fixtures.
 
 AIJOBS_DISCOVERY_E2E=1 python -m unittest test_link_discovery_browser -v
-Search provider, OCR engine, and autofill task are mocked; no real applications.
+Search provider and autofill task are mocked; no real applications.
 """
 import io
 import json
@@ -31,7 +31,6 @@ class DiscoveryBrowserTests(unittest.TestCase):
             patch.object(web, '_search_external_recruitment_links', return_value=([
                 dict(company='示例教育', title='托管老师（测试）', url='https://education.example.com/apply',
                      host='education.example.com', source='外网测试数据（未核实）', city='', role_match=True)], '')),
-            patch('pytesseract.image_to_string', return_value='示例科技 | 前端\n示例教育 | 托管老师'),
         ]
         for item in cls.patches:
             item.start()
@@ -59,7 +58,7 @@ class DiscoveryBrowserTests(unittest.TestCase):
             item.stop()
         cls.temp.cleanup()
 
-    def test_lists_ocr_result_navigation_and_fill_link_on_desktop_and_mobile(self):
+    def test_lists_result_navigation_and_fill_link_on_desktop_and_mobile(self):
         for width, big in [(1280, False), (390, False), (430, True)]:
             with self.subTest(width=width, large_font=big):
                 context = self.browser.new_context(viewport={'width': width, 'height': 900})
@@ -108,15 +107,6 @@ class DiscoveryBrowserTests(unittest.TestCase):
                 page.get_by_role('button', name='用此链接填表', exact=True).click()
                 self.assertEqual(page.locator('#step1-autofill-url').input_value(), 'https://jobs.example.com/apply')
                 self.assertEqual(len(starts), 1)
-                # Verify file upload -> OCR endpoint -> editable text -> two-company review.
-                from PIL import Image
-                image = io.BytesIO()
-                Image.new('RGB', (200, 60), 'white').save(image, format='PNG')
-                page.get_by_role('textbox', name='企业名单文字').fill('')
-                page.locator('.discover-upload input').set_input_files({'name': '名单.png',
-                    'mimeType': 'image/png', 'buffer': image.getvalue()})
-                page.get_by_role('button', name='搜索 2 家企业', exact=True).wait_for()
-                self.assertIn('托管老师', page.get_by_role('textbox', name='企业名单文字').input_value())
                 self.assertEqual(errors, [])
                 print(json.dumps({'width': width, 'large_font': big, 'flow': 'passed',
                                   'screenshot': str(self.shots / f'results-{width}-big{int(big)}.png')}, ensure_ascii=False))

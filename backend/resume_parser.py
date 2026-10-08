@@ -13,9 +13,11 @@
    姓名靠排版猜，会认错（low）——标 low 的字段界面上必须提示「核对一下」。
 
 支持 PDF / docx / txt。docx 用标准库拆包（它就是 zip + XML，不需要第三方库）；
-PDF 先用 pypdf 抽文字层（纯 Python，requirements.txt 有）；抽不到文字（图片版/扫描件）
-再降级用 tesseract 做 OCR（chi_sim+eng，服务器已装）。老式 .doc 和纯照片版读不了，
-这种情况给一句人话告诉他怎么办，而不是抛个看不懂的错。
+PDF 用 pypdf 抽文字层（纯 Python，requirements.txt 有）。图片版/扫描版 PDF 没有文字层，
+老式 .doc 和纯照片版也一样读不了——这种情况给一句人话告诉他怎么办，而不是抛个看不懂的错。
+
+（2026-10-08：截图/图片识别整体下线——手写体本来就认不出来，留着只会给用户错误的期待。
+图片版 PDF 同理，直接告诉用户转 .docx，别拿认不准的字糊弄他。）
 """
 import io
 import re
@@ -93,12 +95,15 @@ def _has_text(t):
 
 
 def _pdf_text(data):
-    """读 PDF：先 pypdf（文字版又快又准）；文字层为空/太少就降级走 OCR（图片版简历）。"""
+    """读 PDF：只认文字层（pypdf 抽，纯 Python，又快又准）。
+
+    图片版/扫描版 PDF 没有文字层，抽出来是空的——那就如实说读不了，
+    让用户另存为 .docx，不要拿认不准的东西去糊弄。
+    """
     try:
         from pypdf import PdfReader
     except ImportError:
-        # pypdf 都没装，直接走 OCR 兜底（若也装了的话）
-        return _pdf_ocr(data)
+        return None, ('服务器上还没装读 PDF 的组件。你把简历用 Word 另存为 .docx 再传就行。')
     text = ''
     try:
         reader = PdfReader(io.BytesIO(data))
@@ -112,69 +117,14 @@ def _pdf_text(data):
             pages.append(pg.extract_text() or '')
         text = '\n'.join(pages)
     except Exception:                                 # noqa: BLE001
-        text = ''                                     # 抽失败也别慌，下面还有 OCR
+        text = ''                                     # 抽失败就当没抽到，下面统一给提示
     # 文字层够用就直接返回（docx/txt 走别的路，这里只管 PDF）
     if _has_text(text):
-        # 简历常见「姓名/电话印在页眉图片里」：正文是文字、联系方式却是图，
-        # pypdf 抽不到电话。若 pypdf 文本里既没有手机号也没有邮箱，
-        # 再跑一轮 OCR 把图里的联系方式也捞出来（普通文字简历不受影响，不白跑）。
-        if not re.search(r'1[3-9]\d{9}', text) and not _EMAIL_RE.search(text):
-            ocr, _ = _pdf_ocr(data)
-            if ocr:
-                text = text + '\n' + ocr
         return text, ''
-    # 文字层为空/太少 → 疑似图片版简历，降级走 OCR
-    ocr, oerr = _pdf_ocr(data)
-    if ocr:
-        return ocr, ''
     if text:
         return text, ''                               # 有一点点文字也先用着
-    return None, (oerr or '这份 PDF 打不开，可以试试另存为 .docx 再传。')
-
-
-def _pdf_ocr(data):
-    """图片版 PDF：每页渲染成图，再用 tesseract 做 OCR（中文简体 + 英文）。
-
-    只在没有可见文字层时才被调用——文字版 PDF 永远走 pypdf，不会被这里的
-    识别误差污染。中文 OCR 够用但不完美，表格/特殊排版可能略乱；认不出的字段
-    本来就会留空让用户补，所以最坏情况也只是「少认几项」，不会填错。
-    """
-    try:
-        from pdf2image import convert_from_bytes
-        import pytesseract
-    except ImportError:
-        return None, ('服务器上还缺 OCR 组件（tesseract + pytesseract）。'
-                      '让技术人员装一下就行；或者你把简历用 Word 另存为 .docx 再传。')
-    try:
-        imgs = convert_from_bytes(data, dpi=200)[:15]   # 简历一般不会太长
-    except Exception as e:                            # noqa: BLE001
-        return None, '这份 PDF 转图片失败（%s）。可以试试另存为 .docx 再传。' % str(e)[:60]
-    if not imgs:
-        return None, '这份 PDF 里没有页面，读不出来。'
-    try:
-        parts = []
-        for im in imgs:
-            # psm 6：假定整页是一块统一的文本；chi_sim+eng 同时认中英文
-            parts.append(pytesseract.image_to_string(
-                im, lang='chi_sim+eng', config='--psm 6'))
-        text = '\n'.join(parts)
-        # 二次「只认数字」识别：中文 OCR 对长串手机号极易把 1→l、0→O、8→B，
-        # 用白名单把识别范围锁到数字和常见分隔符上，专门捞电话/手机，显著提准。
-        digits = []
-        for im in imgs:
-            try:
-                dl = pytesseract.image_to_string(
-                    im, lang='eng',
-                    config='--psm 6 -c tessedit_char_whitelist=0123456789+()- '
-                    ).splitlines()
-                digits.extend(l.strip() for l in dl if re.search(r'\d{7,}', l))
-            except Exception:                         # noqa: BLE001
-                pass
-        if digits:
-            text += '\n' + '\n'.join(digits)
-        return text, ''
-    except Exception as e:                            # noqa: BLE001
-        return None, 'OCR 识别失败（%s）。可以试试另存为 .docx 再传。' % str(e)[:60]
+    return None, ('这份 PDF 里没有可读的文字（像是图片版或扫描版），认不出来。'
+                  '用 Word 打开它，另存为 .docx 再传就行。')
 
 
 def extract_text(filename, data):
@@ -183,8 +133,7 @@ def extract_text(filename, data):
     ext = name[name.rfind('.'):] if '.' in name else ''
 
     if ext in ('.jpg', '.jpeg', '.png', '.bmp', '.webp', '.heic'):
-        return None, ('照片版简历暂时读不了——照片上的字要专门的技术才能认。'
-                      '如果原来有 Word 或 PDF 版本，传那份更准。')
+        return None, ('照片版简历读不了。如果原来有 Word 或 PDF 版本，传那份更准。')
     if ext == '.doc':
         return None, ('这种老式 Word（.doc）读不了。用 Word 打开它，'
                       '「另存为」选「Word 文档(.docx)」，再传上来就行。')

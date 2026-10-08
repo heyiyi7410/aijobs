@@ -27,10 +27,6 @@ export const api = {
     req('/api/jobs/company', { company, profile: p, profile_id: profileId, city }),
   discoverCompanyLinks: (company, role, signal) =>
     req('/api/jobs/discover-links', { company, role }, signal),
-  ocrCompanyScreenshot: data_b64 =>
-    req('/api/jobs/ocr-screenshot', { data_b64 }),
-  // 通用截图识字：粘贴/选择一张截图 → 返回认出的文字（不保存图片）
-  ocrText: data_b64 => req('/api/ocr/text', { data_b64 }),
   apply: (profileId, jobs, channel, profile, extra) =>
     req('/api/apply', { profile_id: profileId, jobs, channel, profile, ...(extra || {}) }),
   // 大模型配置（按岗位定制简历用）：base_url / api_key / model / enabled

@@ -49,15 +49,7 @@
             class="af-input"
             v-model="customUrl"
             placeholder="把招聘网站的投递页链接粘进来，例如 https://jobs.xxx.com/apply/123"
-            @paste="onUrlPaste"
           >
-          <!-- 链接/文字只在截图里时：贴在输入框里认，或点这里选图 -->
-          <button
-            class="btn af-ocr-btn"
-            :class="{ 'af-ocr-btn-on': ocrOpen }"
-            :disabled="ocrBusy"
-            @click="toggleOcr"
-          >{{ ocrBusy ? '识别中…' : '截图识字' }}</button>
         </div>
         <p class="af-warn" style="margin:.4rem 0 0;" v-if="!urlValid">
           链接要以 http:// 或 https:// 开头才有效。
@@ -66,41 +58,6 @@
           网页可能在输入时自动保存资料；系统不会点击申请或最终提交。复杂控件仍可能需要手动填写。
         </p>
 
-        <!-- 截图识字：把截图贴进来（Ctrl+V）或选一张图，认出文字后可直接复制；
-             认出来像链接还能一键填进上面的输入框。 -->
-        <div v-if="ocrOpen" class="af-ocr" @dragover.prevent @drop.prevent="onOcrDrop">
-          <p class="af-flabel">把截图贴进来（Ctrl+V），或选一张图 / 拖到这里</p>
-          <div class="af-ocr-actions">
-            <label class="btn" :class="{ 'af-ocr-disabled': ocrBusy }">
-              {{ ocrBusy ? '正在识字…' : '选择图片' }}
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                :disabled="ocrBusy"
-                @change="onOcrFile"
-              >
-            </label>
-            <span class="muted">PNG / JPG / WebP，≤ {{ OCR_MAX_MB }} MB</span>
-          </div>
-          <img v-if="ocrShot" :src="ocrShot" class="af-ocr-preview" alt="待识别的截图">
-          <p v-if="ocrMsg" class="af-ocr-msg" role="status">{{ ocrMsg }}</p>
-          <textarea
-            v-if="ocrText"
-            class="af-input af-ocr-text"
-            rows="4"
-            v-model="ocrText"
-            aria-label="识别出的文字"
-          ></textarea>
-          <div v-if="ocrText" class="af-ocr-actions">
-            <button class="btn" @click="copyOcrText">复制文字</button>
-            <button v-if="ocrUrl" class="btn btn-primary" @click="useOcrUrl">
-              把识别出的链接填进去
-            </button>
-          </div>
-          <p v-if="ocrText" class="muted" style="margin:.4rem 0 0;">
-            识别的字可以改——认错很正常，改完再复制或使用。
-          </p>
-        </div>
       </div>
 
       <div v-if="customOnly" class="af-review-fields">
@@ -286,7 +243,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { store, profilePayload } from '../store'
 import { api } from '../api'
 
@@ -516,112 +473,6 @@ async function answer(value) {
   setTimeout(poll, 500)
 }
 
-// ---- 截图识字：链接/文字只在截图里时用。粘贴（Ctrl+V）、选图、拖入都能认。
-const OCR_MAX_MB = 5
-const ocrOpen = ref(false)
-const ocrBusy = ref(false)
-const ocrShot = ref('')        // 预览用的 data URL
-const ocrText = ref('')        // 认出来的文字（可改）
-const ocrMsg = ref('')
-// 认出来的文字里若带链接，给他一键填进上面的输入框
-const ocrUrl = computed(() => {
-  const m = (ocrText.value || '').match(/https?:\/\/[^\s，。；、"'（）()【】<>]+/i)
-  return m ? m[0] : ''
-})
-
-function toggleOcr() {
-  ocrOpen.value = !ocrOpen.value
-  if (!ocrOpen.value) ocrMsg.value = ''
-}
-
-// 读成 data URL 再送后端认字。三个入口（粘贴/选图/拖入）都收口到这里，
-// 免得三份逻辑各写一遍、各自漏一点校验。
-async function ocrFromFile(f) {
-  if (!f) return
-  if (!/^image\/(png|jpeg|webp)$/i.test(f.type || '')) {
-    ocrMsg.value = '只认 PNG、JPG、WebP 图片'
-    return
-  }
-  if (f.size > OCR_MAX_MB * 1024 * 1024) {
-    ocrMsg.value = '图片太大了（超过 ' + OCR_MAX_MB + ' MB），截小一点再试'
-    return
-  }
-  ocrMsg.value = ''
-  ocrText.value = ''
-  ocrOpen.value = true
-  ocrBusy.value = true
-  try {
-    const dataUrl = await new Promise((resolve, reject) => {
-      const fr = new FileReader()
-      fr.onload = () => resolve(String(fr.result || ''))
-      fr.onerror = () => reject(new Error('读不出这个文件'))
-      fr.readAsDataURL(f)
-    })
-    ocrShot.value = dataUrl
-    const r = await api.ocrText(dataUrl.split(',')[1] || '')
-    ocrText.value = r.text || ''
-    ocrMsg.value = r.ok
-      ? (ocrText.value ? '认出来了，字在下面，可以改。' : '没认出文字，换一张清楚点的试试。')
-      : (r.msg || '这张图没识出来，换一张试试')
-  } catch (e) {
-    ocrMsg.value = '识别失败（' + (e.message || '网络不通') + '），可以直接手打链接'
-  } finally {
-    ocrBusy.value = false
-  }
-}
-
-function onOcrFile(e) {
-  const f = e.target.files && e.target.files[0]
-  e.target.value = ''      // 清掉，方便再选同一个文件
-  ocrFromFile(f)
-}
-
-function onOcrDrop(e) {
-  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]
-  ocrFromFile(f)
-}
-
-// 剪贴板里是图（截图）就认图；粘的是文字就放行，照常粘进输入框
-function pasteImage(e) {
-  const items = (e.clipboardData && e.clipboardData.items) || []
-  for (const it of items) {
-    if (it.kind === 'file' && /^image\//i.test(it.type || '')) {
-      const f = it.getAsFile()
-      if (f) { ocrFromFile(f); return true }
-    }
-  }
-  return false
-}
-
-function onUrlPaste(e) {
-  if (pasteImage(e)) e.preventDefault()
-}
-
-// 面板开着时页面上任意位置 Ctrl+V 都能贴图，不用先去点中哪个框
-function onWinPaste(e) {
-  if (!ocrOpen.value || ocrBusy.value) return
-  pasteImage(e)
-}
-
-function copyOcrText() {
-  const text = ocrText.value || ''
-  if (!text) return
-  const done = () => { ocrMsg.value = '已复制，去粘到需要的地方吧' }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(done, () => {
-      ocrMsg.value = '这个浏览器不让自动复制，手动选中复制吧'
-    })
-  } else {
-    ocrMsg.value = '这个浏览器不让自动复制，手动选中复制吧'
-  }
-}
-
-function useOcrUrl() {
-  if (!ocrUrl.value) return
-  customUrl.value = ocrUrl.value
-  ocrMsg.value = '链接已填进上面的输入框，核对一下再开始'
-}
-
 function reset() {
   if (timer) clearInterval(timer)
   timer = null
@@ -638,10 +489,8 @@ function reset() {
   profileConfirmed.value = false
 }
 
-onMounted(() => window.addEventListener('paste', onWinPaste))
 onUnmounted(() => {
   if (timer) clearInterval(timer)
-  window.removeEventListener('paste', onWinPaste)
 })
 </script>
 
@@ -732,26 +581,9 @@ onUnmounted(() => {
   border: 1px solid var(--line-2); border-radius: .6rem;
   font-size: 1.15rem; letter-spacing: .08em; font-family: inherit;
 }
-/* 链接输入框 + 「截图识字」并排 */
+/* 链接输入框 */
 .af-url-row { display: flex; gap: .6rem; align-items: stretch; }
 .af-url-row .af-input { flex: 1 1 auto; min-width: 0; }
-.af-ocr-btn { flex: 0 0 auto; margin-top: .6rem; white-space: nowrap; }
-.af-ocr-btn-on { border-color: var(--accent); color: var(--accent); }
-.af-ocr {
-  margin-top: .8rem; padding: .85rem; border-radius: .6rem;
-  background: var(--surface-2); border: 1px dashed var(--line-2);
-}
-.af-ocr-actions { display: flex; align-items: center; gap: .7rem; margin-top: .6rem; flex-wrap: wrap; }
-.af-ocr-actions label.btn { position: relative; overflow: hidden; cursor: pointer; }
-.af-ocr-actions label.btn input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
-.af-ocr-disabled { opacity: .6; cursor: wait; }
-.af-ocr-preview {
-  display: block; width: 100%; margin-top: .7rem;
-  border: 1px solid var(--line); border-radius: .5rem;
-}
-.af-ocr-msg { margin: .5rem 0 0; font-size: .93rem; color: var(--ink-2); }
-/* 认出的文字是成段内容，别用数字字段那套字距 */
-.af-ocr-text { margin-top: .6rem; font-size: 1rem; letter-spacing: 0; }
 .af-ask {
   background: var(--warn-1); border: 1px solid var(--warn-1); border-radius: .8rem;
   padding: 1rem; margin: 1rem 0;

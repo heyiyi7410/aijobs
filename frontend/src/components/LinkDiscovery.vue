@@ -8,22 +8,17 @@
       </span>
       <h2 id="discover-title" class="card-title">从企业名单找招聘链接</h2>
     </div>
-    <p class="card-hint">粘贴多家企业名称，或上传名单截图。先查本站已收录的岗位；没有时再查外网。每行一家，可写“企业名称 | 岗位”。</p>
-    <textarea v-model="sourceText" class="input discover-input" rows="4" :disabled="searching || ocrBusy"
-      @paste="onPaste" aria-label="企业名单文字" placeholder="企业名称 | 岗位（每行一家），也可以在此粘贴截图"></textarea>
+    <p class="card-hint">粘贴多家企业名称。先查本站已收录的岗位；没有时再查外网。每行一家，可写“企业名称 | 岗位”。</p>
+    <textarea v-model="sourceText" class="input discover-input" rows="4" :disabled="searching"
+      aria-label="企业名单文字" placeholder="企业名称 | 岗位（每行一家）"></textarea>
     <div class="discover-actions">
-      <label class="btn discover-upload" :class="{ 'upload-disabled': ocrBusy || searching }">
-        {{ ocrBusy ? '正在识别截图…' : '上传截图识别文字' }}
-        <input type="file" accept="image/png,image/jpeg,image/webp" :disabled="ocrBusy || searching" aria-label="上传企业名单截图" @change="onImage">
-      </label>
-      <button class="btn btn-primary" :disabled="ocrBusy || searching" @click="prepare">核对企业名单</button>
+      <button class="btn btn-primary" :disabled="searching" @click="prepare">核对企业名单</button>
     </div>
-    <p v-if="ocrBusy" class="discover-status" role="status">正在识别截图文字…</p>
     <p v-if="error" class="discover-error" role="alert">{{ error }}</p>
     <p v-if="notice" class="discover-status" role="status">{{ notice }}</p>
 
     <div v-if="entries.length" class="discover-review">
-      <h3>先核对，再搜索 <small>最多 {{ MAX_COMPANIES }} 家；识别错误可直接修改</small></h3>
+      <h3>先核对，再搜索 <small>最多 {{ MAX_COMPANIES }} 家；写错的可直接改</small></h3>
       <div v-for="(entry, index) in entries" :key="index" class="discover-edit">
         <span>{{ index + 1 }}</span>
         <input v-model="entry.company" class="input" :disabled="searching" maxlength="100" :aria-label="`第 ${index + 1} 家企业`" placeholder="企业名称">
@@ -79,7 +74,6 @@ const { sourceText, entries, results, current } = toRefs(store.linkDiscovery)
 const progress = ref(0)
 const searchTotal = ref(0)
 const searching = ref(false)
-const ocrBusy = ref(false)
 const error = ref('')
 const notice = ref('')
 let searchController = null
@@ -102,52 +96,12 @@ function prepare() {
     return true
   })
   entries.value = candidates.slice(0, MAX_COMPANIES)
-  if (candidates.length > MAX_COMPANIES) notice.value = `识别到 ${candidates.length} 家，先搜索前 ${MAX_COMPANIES} 家；其余企业可分批搜索。`
-  if (!entries.value.length) error.value = '请粘贴企业名单，或先上传截图识别文字'
-}
-
-async function onImage(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  await recognizeImage(file)
-}
-
-async function onPaste(event) {
-  const file = [...(event.clipboardData?.files || [])].find(item => item.type.startsWith('image/'))
-  if (!file) return
-  event.preventDefault()
-  await recognizeImage(file)
-}
-
-async function recognizeImage(file) {
-  if (!file) return
-  if (searching.value || ocrBusy.value) return
-  error.value = ''
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
-    error.value = '请上传不超过 5 MB 的 PNG、JPG 或 WebP 截图'
-    return
-  }
-  ocrBusy.value = true
-  try {
-    const data = await new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result)
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-    const result = await api.ocrCompanyScreenshot(data)
-    if (!result.ok) throw new Error(result.msg || '没有识别到文字')
-    sourceText.value = [sourceText.value.trim(), result.text].filter(Boolean).join('\n')
-    prepare()
-  } catch (cause) {
-    error.value = cause.message || '截图识别失败，请直接粘贴企业名单'
-  } finally {
-    ocrBusy.value = false
-  }
+  if (candidates.length > MAX_COMPANIES) notice.value = `共 ${candidates.length} 家，先搜索前 ${MAX_COMPANIES} 家；其余企业可分批搜索。`
+  if (!entries.value.length) error.value = '请粘贴企业名单'
 }
 
 async function searchAll() {
-  if (searching.value || ocrBusy.value) return
+  if (searching.value) return
   error.value = ''
   if (!entries.value.length || entries.value.some(entry => entry.company.trim().length < 2)) {
     error.value = '请先核对每家企业的名称（至少两个字）'
@@ -192,10 +146,6 @@ function webSearchUrl(company, role) {
 .discover-input { width: 100%; min-height: 7rem; box-sizing: border-box; resize: vertical; }
 .discover-actions, .discover-link-actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .75rem; }
 .discover-actions .btn, .discover-link-actions .btn { min-height: 2.75rem; display: inline-flex; align-items: center; justify-content: center; }
-.discover-upload { position: relative; overflow: hidden; cursor: pointer; }
-.discover-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
-.discover-upload:focus-within { outline: .15rem solid var(--primary-7); outline-offset: .15rem; }
-.upload-disabled { opacity: .6; cursor: wait; }
 .discover-status, .discover-scope, .discover-empty { color: var(--ink-2); line-height: 1.5; }
 .discover-error { color: var(--danger); }
 .discover-review, .discover-results { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
