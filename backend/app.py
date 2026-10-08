@@ -13,7 +13,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
 sys.path.insert(0, BASE_DIR)
 
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import (Flask, has_request_context, jsonify, request,
+                   send_file, send_from_directory)
 from flask_socketio import SocketIO
 from flask_cors import CORS
 
@@ -262,6 +263,26 @@ def current_user():
     return models.get_user_by_token(auth)
 
 
+def _own_profile_id():
+    """当前登录账号名下的档案 id；未登录、或该账号还没建过档案 → None。
+
+    投递记录一律挂登录账号的档案，**客户端传的 profile_id 一概不认**：
+    那是个谁都能填的数字，认了就等于谁都能往别人账号里写投递记录、
+    也能把别人的投递历史读出来（2026-10-08 收紧）。
+
+    没在请求里（后台线程 / 测试直接调 _collect_for_profile）就当没登录，
+    返回 None —— 那里本来也拿不到 Authorization 头，不能让它抛 RuntimeError
+    （test_65 就是这么炸的）。
+    """
+    if not has_request_context():
+        return None
+    u = current_user()
+    if not u:
+        return None
+    prof = models.get_profile_for_user(u['id'])
+    return prof['id'] if prof else None
+
+
 @app.route('/api/profile', methods=['POST'])
 def api_save_profile():
     data = request.get_json(force=True, silent=True) or {}
@@ -374,8 +395,12 @@ def api_search():
     limit = _as_int(data.get('limit'), 200) or 200
     limit = max(1, min(limit, 2000))      # 别让一次请求把源站薅秃
     want = DEFAULT_NATURES if natures is None else list(natures)
-    # 投过的岗位不再重复出现，避免同一个人被反复推同一个坑
-    exclude = models.list_applied_keys(data.get('profile_id'))
+    # 投过的岗位不再重复出现，避免同一个人被反复推同一个坑。
+    # 只认登录账号自己的投递记录（见 _own_profile_id）：以前直接吃前端传的
+    # profile_id，不传就是**全库所有人**投过的岗位一起排——别人投过什么，
+    # 会从你的搜索结果里悄无声息地消失。
+    pid = _own_profile_id()
+    exclude = models.list_applied_keys(pid) if pid else set()
 
     # 第一优先：读服务端岗位缓存。后台每 30 分钟刷新，绝大多数搜索毫秒级返回；
     # 库里没有（首次/冷门城市）才现爬兜底，并把结果回写库，下次就快了。
@@ -699,7 +724,8 @@ def api_company_search():
     profile = data.get('profile') or {}
     city = (data.get('city') or profile.get('city') or '').strip()
     natures = data.get('natures') or profile.get('nature') or None
-    pid = data.get('profile_id') or profile.get('profile_id') or profile.get('id')
+    # 投递记录只认登录账号（见 _own_profile_id），不再吃前端传的 profile_id
+    pid = _own_profile_id()
     exclude = models.list_applied_keys(pid) if pid else set()
 
     pool, seen = [], set()
@@ -826,8 +852,8 @@ def _collect_for_profile(profile, force=False, wide=True):
     words = search_words(profile)
     targeted = bool(intent_labels(profile))
 
-    # 投过的岗位不再重复出现
-    pid = profile.get('id') or profile.get('profile_id')
+    # 投过的岗位不再重复出现（只认登录账号自己的记录，见 _own_profile_id）
+    pid = _own_profile_id()
     exclude = models.list_applied_keys(pid) if pid else set()
 
     # 命中缓存就直接返回（已投过的仍然要剔掉，那是个人的、不能缓存）
@@ -1008,7 +1034,9 @@ def api_apply():
     channel='smtp'    系统代发，后台线程逐条发送，WebSocket 推进度
     """
     data = request.get_json(force=True, silent=True) or {}
-    profile_id = data.get('profile_id')
+    # 投递记录只挂登录账号的档案（见 _own_profile_id）。未登录照旧能投 ——
+    # 邮件照发、跳转照给，只是不落记录：「投递记录只有登录的账号才有」。
+    profile_id = _own_profile_id()
     profile = data.get('profile') or {}
     jobs = data.get('jobs') or []
     channel = data.get('channel') or 'mailto'
@@ -1189,15 +1217,21 @@ def api_applied():
 
     这是最主要的投递方式——央企国企招聘门户都要注册登录，
     我们跳过去，用户在那边投，回来这里标记一下投递进度。
+
+    记录归属当前登录账号（前端传的 profile_id 不参与，见 _own_profile_id）：
+    未登录不落记录，登录但还没建档也落不了——不能凭空挂到别人档案上。
     """
     data = request.get_json(force=True, silent=True) or {}
-    profile_id = data.get('profile_id')
+    if not current_user():
+        return jsonify(ok=False, msg='登录后才能记录投递'), 401
+    pid = _own_profile_id()
+    if not pid:
+        return jsonify(ok=False, msg='还没有简历档案，先填一份再投递'), 400
     job = data.get('job') or {}
     status = data.get('status') or '已在官网投递'
-    if profile_id:
-        models.save_application(
-            profile_id, job, job.get('score', 0), status, 'link',
-            job.get('apply_url') or '')
+    models.save_application(
+        pid, job, job.get('score', 0), status, 'link',
+        job.get('apply_url') or '')
     return jsonify(ok=True)
 
 
@@ -1353,9 +1387,16 @@ def _as_int(v, default=None):
 
 @app.route('/api/records')
 def api_records():
-    profile_id = request.args.get('profile_id')
-    rows = models.list_applications(_as_int(profile_id))
-    return jsonify(ok=True, records=rows)
+    """我的投递记录：只返回当前登录账号自己的。
+
+    以前是 `?profile_id=` 说了算 —— 不传就把**全库所有人**的投递记录端出来，
+    传个别人的数字就能看别人的投递历史。现在只认登录态：
+    未登录 401；登录后按账号档案取，前端传什么都不看。
+    """
+    if not current_user():
+        return jsonify(ok=False, msg='登录后才能查看投递记录', records=[]), 401
+    pid = _own_profile_id()
+    return jsonify(ok=True, records=models.list_applications(pid) if pid else [])
 
 
 # ------------------------- 自动填表（测试版） -------------------------

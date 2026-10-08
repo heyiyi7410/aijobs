@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import time
+import contextlib
 import tempfile
 import unittest
 
@@ -70,6 +71,44 @@ def profile(**kw):
     }
     p.update(kw)
     return p
+
+
+def auth_headers(client, username, password='pw-123456'):
+    """注册并登录一个账号，返回能直接塞进请求的 Authorization 头。
+
+    投递记录 2026-10-08 起只认登录账号（见 app._own_profile_id），
+    凡是要读写投递记录的用例都得先有个账号，否则拿到的是 401。
+    """
+    r = client.post('/api/auth/register',
+                    json={'username': username, 'password': password}).get_json()
+    assert r.get('token'), r
+    return {'Authorization': 'Bearer ' + r['token']}
+
+
+@contextlib.contextmanager
+def all_live_sources_off():
+    """临时关掉**全部**真实源（名字从 LIVE_COLLECTORS 推导，不写死）。
+
+    写死过一次教训：gov_soe 扩源之后「关掉所有真实源」的前提就不成立了。
+    2026-10-08 加 gwy_public 又踩一次 —— 它读本地快照、不走 net.request，
+    网络全断也照样有数据，「真实源全挂 → 走兜底」这条断言自然失败。
+    要「所有真实源都不可用」，就照着采集器列表关，别再手写名单。
+    """
+    from collectors import LIVE_COLLECTORS, _OVERRIDE_PATH
+    os.makedirs(os.path.dirname(_OVERRIDE_PATH), exist_ok=True)
+    old = (open(_OVERRIDE_PATH, encoding='utf-8').read()
+           if os.path.exists(_OVERRIDE_PATH) else None)
+    try:
+        with open(_OVERRIDE_PATH, 'w', encoding='utf-8') as f:
+            json.dump({c.name: False for c in LIVE_COLLECTORS}, f)
+        yield
+    finally:
+        if old is None:
+            if os.path.exists(_OVERRIDE_PATH):
+                os.remove(_OVERRIDE_PATH)
+        else:
+            with open(_OVERRIDE_PATH, 'w', encoding='utf-8') as f:
+                f.write(old)
 
 
 class TestWeb(unittest.TestCase):
@@ -240,19 +279,22 @@ class TestWeb(unittest.TestCase):
 
     # 12
     def test_12_records_saved(self):
-        pid = self.c.post('/api/profile', json=profile(phone='13900005678')).get_json()['profile_id']
+        # 记录只挂登录账号，所以这个用例先注册登录（见 auth_headers）
+        h = auth_headers(self.c, 'rec_smtp')
+        pid = self.c.post('/api/profile', json=profile(phone='13900005678'),
+                          headers=h).get_json()['profile_id']
         jobs = self.c.post('/api/jobs/search', json={'city': '上海'}).get_json()['jobs'][:1]
         jobs[0]['hr_email'] = 'hr@example.com'
         r = self.c.post('/api/apply', json={
             'profile_id': pid, 'jobs': jobs, 'channel': 'smtp', 'profile': profile()
-        }).get_json()
+        }, headers=h).get_json()
         tid = r['task_id']
         for _ in range(60):
             time.sleep(0.3)
             t = self.c.get('/api/task/%s' % tid).get_json()['task']
             if t['status'] != 'running':
                 break
-        recs = self.c.get('/api/records?profile_id=%s' % pid).get_json()['records']
+        recs = self.c.get('/api/records', headers=h).get_json()['records']
         self.assertEqual(len(recs), 1)
         # 测试环境邮件是演练模式（见文件头 mailer.load_config 的替身），
         # 状态必须如实写「未真发」——以前这里断言成「已发送」，
@@ -285,14 +327,17 @@ class TestWeb(unittest.TestCase):
 
     # 14
     def test_14_applied_receipt(self):
-        """跳转投递的回执要能记进投递记录。"""
-        pid = self.c.post('/api/profile', json=profile(phone='13700001111')).get_json()['profile_id']
+        """跳转投递的回执要能记进投递记录（记录归属登录账号）。"""
+        h = auth_headers(self.c, 'rec_link')
+        pid = self.c.post('/api/profile', json=profile(phone='13700001111'),
+                          headers=h).get_json()['profile_id']
         job = {'title': '电力线路运维工', 'company': '国家电网', 'key': 'k1',
                'apply_url': 'https://www.iguopin.com'}
         r = self.c.post('/api/applied', json={
-            'profile_id': pid, 'job': job, 'status': '已在官网投递'}).get_json()
+            'profile_id': pid, 'job': job, 'status': '已在官网投递'},
+            headers=h).get_json()
         self.assertTrue(r['ok'])
-        recs = self.c.get('/api/records?profile_id=%s' % pid).get_json()['records']
+        recs = self.c.get('/api/records', headers=h).get_json()['records']
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0]['channel'], 'link')
         self.assertEqual(recs[0]['status'], '已在官网投递')
@@ -398,8 +443,11 @@ class TestWeb(unittest.TestCase):
             raise RuntimeError('对方服务器炸了')
         net.request = boom
         try:
-            from collectors import collect_jobs_with_report
-            rep = collect_jobs_with_report(keyword='电力', city='成都', limit=20)
+            # 光断网不够：还有不吃网络的源（gwy_public 读本地快照），
+            # 得连着把它们一起关掉，才算「所有真实源都不可用」。
+            with all_live_sources_off():
+                from collectors import collect_jobs_with_report
+                rep = collect_jobs_with_report(keyword='电力', city='成都', limit=20)
         finally:
             net.request = original
         self.assertIsInstance(rep['jobs'], list)
@@ -440,45 +488,42 @@ class TestWeb(unittest.TestCase):
         self.assertNotIn(victim['key'], [j['key'] for j in again2['jobs']])
 
         # 真走一遍库：建档 -> 记一条投递 -> 再搜，应该看不见了
-        pid = models.save_profile(profile(phone='13800005555'))
+        # 排除口径只认登录账号（见 app._own_profile_id），所以这条路要先登录
+        h = auth_headers(self.c, 'rec_exclude')
+        pid = self.c.post('/api/profile', json=profile(phone='13800005555'),
+                          headers=h).get_json()['profile_id']
         models.save_application(pid, victim, 80, '已投递')
         keys = models.list_applied_keys(pid)
         self.assertIn(victim['key'], keys)
         r = self.c.post('/api/jobs/search',
-                        json={'keyword': '电力', 'city': '', 'limit': 20,
-                              'profile_id': pid}).get_json()
+                        json={'keyword': '电力', 'city': '', 'limit': 20},
+                        headers=h).get_json()
         self.assertNotIn(victim['key'], [j['key'] for j in r['jobs']])
+
+        # 反过来：不登录就没有「投过」可言，不能拿别人的投递记录去排岗位。
+        # 以前这里直接吃前端传的 profile_id，于是别人投过什么会从你的结果里消失。
+        anon = self.c.post('/api/jobs/search',
+                           json={'keyword': '电力', 'city': '', 'limit': 20,
+                                 'profile_id': pid}).get_json()
+        self.assertIn(victim['key'], [j['key'] for j in anon['jobs']])
 
     # 22 —— 渠道可以单独关掉，不用改代码（ai-job-search 的 enabled: 开关）
     def test_22_source_can_be_disabled(self):
         from collectors import _enabled, _active, LIVE_COLLECTORS, \
-            collect_jobs_with_report, _OVERRIDE_PATH
+            collect_jobs_with_report
         guopin = [c for c in LIVE_COLLECTORS if c.name == 'guopin'][0]
         self.assertTrue(_enabled(guopin))
 
-        # 关掉所有联网真实源，必须自动落到兜底而不是空白。
-        # 注：gov_soe（各省国企招聘公告源）也是真实源，2026-09-21 扩到 20+ 个源
-        # 之后它能稳定抓到岗位，测试必须一并关掉它，否则这条前提不成立。
-        os.makedirs(os.path.dirname(_OVERRIDE_PATH), exist_ok=True)
-        had = os.path.exists(_OVERRIDE_PATH)
-        old = open(_OVERRIDE_PATH, encoding='utf-8').read() if had else None
-        try:
-            with open(_OVERRIDE_PATH, 'w', encoding='utf-8') as f:
-                json.dump({'guopin': False, 'mohrss': False, 'foreign': False,
-                           'gov_soe': False}, f)
+        # 关掉所有真实源，必须自动落到兜底而不是空白。
+        # 名单按 LIVE_COLLECTORS 推导（见 all_live_sources_off 的说明）：
+        # 手写名单漏一个源，这条前提就悄悄不成立了。
+        with all_live_sources_off():
             self.assertFalse(_enabled(guopin))
             self.assertNotIn(guopin, _active(LIVE_COLLECTORS))
             rep = collect_jobs_with_report(keyword='电力', city='成都', limit=10)
             self.assertTrue(rep['fallback'])
             self.assertTrue(any(s['name'] == 'guopin' and not s['enabled']
                                 for s in rep['sources']))
-        finally:
-            if old is None:
-                if os.path.exists(_OVERRIDE_PATH):
-                    os.remove(_OVERRIDE_PATH)
-            else:
-                with open(_OVERRIDE_PATH, 'w', encoding='utf-8') as f:
-                    f.write(old)
 
 
     # 23 —— 外企官网直招采集器：把亚马逊中国开放接口转成内部岗位结构
@@ -3318,6 +3363,66 @@ class TestWeb(unittest.TestCase):
                       '安卓软键盘不会压缩布局视口，底部按钮会被盖住')
         self.assertIn('theme-color', page)
         self.assertIn('color-scheme', page)
+
+    # 131 —— 投递记录只属于登录账号（2026-10-08 收紧）
+    def test_131_records_require_login(self):
+        """未登录既读不到投递记录，也写不进记录。
+
+        以前 /api/records 是 `?profile_id=` 说了算：不传就返回全库所有人的记录，
+        传个数字就能看别人的投递历史。/api/applied 同样吃前端传的 profile_id，
+        等于谁都能往别人账号里塞记录。
+        """
+        r = self.c.get('/api/records')
+        self.assertEqual(r.status_code, 401)
+        self.assertFalse(r.get_json()['ok'])
+
+        r = self.c.post('/api/applied', json={
+            'profile_id': 1, 'job': {'title': '偷偷记一笔', 'company': '某公司'}})
+        self.assertEqual(r.status_code, 401)
+
+        # 没登录时 /api/apply 照旧能投（邮件照发），只是不落记录
+        r = self.c.post('/api/apply', json={
+            'profile_id': None, 'channel': 'mailto', 'profile': profile(),
+            'jobs': [{'title': '岗位', 'company': '公司', 'key': 'anon1',
+                      'hr_email': 'hr@example.com'}]
+        }).get_json()
+        self.assertTrue(r['ok'])
+        self.assertTrue(r['mails'][0]['ok'], '未登录也应该能生成 mailto')
+
+    # 132 —— 账号之间互不可见，前端硬塞 profile_id 也没用
+    def test_132_records_isolated_between_accounts(self):
+        ha = auth_headers(self.c, 'iso_a')
+        hb = auth_headers(self.c, 'iso_b')
+        pid_a = self.c.post('/api/profile', json=profile(phone='13900001111'),
+                            headers=ha).get_json()['profile_id']
+        self.c.post('/api/profile', json=profile(phone='13900002222'), headers=hb)
+
+        self.c.post('/api/applied', json={
+            'job': {'title': 'A 的岗位', 'company': 'A 公司', 'key': 'ka'}},
+            headers=ha)
+        self.assertEqual(len(self.c.get('/api/records', headers=ha).get_json()['records']), 1)
+
+        # B 看不到 A 的；B 甚至拿 A 的 profile_id 去问，也拿不到
+        self.assertEqual(self.c.get('/api/records', headers=hb).get_json()['records'], [])
+        forged = self.c.get('/api/records?profile_id=%s' % pid_a, headers=hb)
+        self.assertEqual(forged.get_json()['records'], [])
+
+        # A 写记录时即使传来 B 的 profile_id，也只会落在 A 自己名下
+        self.c.post('/api/applied', json={
+            'profile_id': 999999,
+            'job': {'title': 'A 的第二条', 'company': 'A 公司', 'key': 'ka2'}},
+            headers=ha)
+        self.assertEqual(len(self.c.get('/api/records', headers=ha).get_json()['records']), 2)
+        self.assertEqual(self.c.get('/api/records', headers=hb).get_json()['records'], [])
+
+    # 133 —— 登录但还没建档：不凭空挂记录，如实告诉用户
+    def test_133_record_needs_a_profile(self):
+        h = auth_headers(self.c, 'no_profile')
+        r = self.c.post('/api/applied', json={
+            'job': {'title': 'x', 'company': 'y'}}, headers=h)
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(r.get_json()['ok'])
+        self.assertEqual(self.c.get('/api/records', headers=h).get_json()['records'], [])
 
     def read_component(self, name):
         return self.frontend_file('components', name)
